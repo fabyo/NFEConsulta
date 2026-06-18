@@ -475,6 +475,13 @@ artifacts/packages/NFEConsulta.Cli.0.1.7.nupkg
 - Nao usar `IgnoreServerCertificateErrors` em producao.
 - Validar XML por XSD antes de consultar a SEFAZ quando o XML for fornecido pelo usuario.
 
-## Licenca
+## 👨‍💻 Autor
 
-Este projeto usa a licenca MIT. Veja o arquivo [LICENSE](/C:/dev/c#/NFEConsulta/LICENSE).
+Fabyo Guimarães Oliveira
+
+- LinkedIn: [https://www.linkedin.com/in/fabyo-guimaraes/](https://www.linkedin.com/in/fabyo-guimaraes/)
+- GitHub: https://github.com/fabyo
+
+## Licença
+
+MIT.
