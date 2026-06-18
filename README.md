@@ -1,9 +1,9 @@
 ![Logo](https://raw.githubusercontent.com/fabyo/NFEConsulta/master/logo-200.png)
 
-[![NuGet](https://img.shields.io/nuget/v/NFEDanfe.svg)](https://www.nuget.org/packages/NFEConsulta)
-[![Downloads](https://img.shields.io/nuget/dt/NFEDanfe.svg)](https://www.nuget.org/packages/NFEConsulta)
-[![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEDanfe)](https://github.com/fabyo/NFEConsulta)
-[![License](https://img.shields.io/github/license/fabyo/NFEDanfe)](https://github.com/fabyo/NFEConsulta)
+[![NuGet](https://img.shields.io/nuget/v/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
+[![Downloads](https://img.shields.io/nuget/dt/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
+[![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
+[![License](https://img.shields.io/github/license/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 
 `NFEConsulta` e uma biblioteca .NET para trabalhar com NF-e:
 
