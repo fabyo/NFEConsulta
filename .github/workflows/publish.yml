@@ -1,44 +1,45 @@
-name: Publish
+name: Publish NuGet
 
 on:
   push:
     tags:
-      - "v*"
-  workflow_dispatch:
-
-permissions:
-  contents: read
+      - 'v*'
 
 jobs:
-  nuget:
-    name: Publish NuGet packages
-    runs-on: windows-latest
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "10.0.x"
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore
-        run: dotnet restore NFEConsulta.sln
+        run: dotnet restore
 
       - name: Build
-        run: dotnet build NFEConsulta.sln --configuration Release --no-restore
+        run: dotnet build -c Release --no-restore
 
-      - name: Pack NFEConsulta
-        run: dotnet pack src/NFEConsulta.Core/NFEConsulta.Core.csproj --configuration Release --no-build --output artifacts/packages
+      - name: Pack
+        run: dotnet pack -c Release --no-build -o ./artifacts
 
-      - name: Pack NFEConsulta.Cli
-        run: dotnet pack src/NFEConsulta.Cli/NFEConsulta.Cli.csproj --configuration Release --no-build --output artifacts/packages
+      - name: NuGet Login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: fabyoguima
 
-      - name: Publish to NuGet
-        run: dotnet nuget push "artifacts/packages/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+      - name: Publish
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "./artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
