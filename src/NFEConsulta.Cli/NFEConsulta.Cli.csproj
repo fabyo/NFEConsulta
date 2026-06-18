@@ -9,6 +9,7 @@
     <Description>CLI para consultar NF-e na SEFAZ por chave de acesso ou XML.</Description>
     <Authors>NFEConsulta</Authors>
     <PackageTags>nfe;sefaz;nota-fiscal;consulta;cli</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>nfeconsulta</ToolCommandName>
@@ -24,6 +25,7 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
