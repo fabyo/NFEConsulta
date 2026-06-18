@@ -474,3 +474,7 @@ artifacts/packages/NFEConsulta.Cli.0.1.6.nupkg
 - Preferir secret/variavel de ambiente para senha de PFX.
 - Nao usar `IgnoreServerCertificateErrors` em producao.
 - Validar XML por XSD antes de consultar a SEFAZ quando o XML for fornecido pelo usuario.
+
+## Licenca
+
+Este projeto usa a licenca MIT. Veja o arquivo [LICENSE](/C:/dev/c#/NFEConsulta/LICENSE).
