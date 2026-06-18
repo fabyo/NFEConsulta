@@ -25,13 +25,13 @@ jobs:
             10.0.x
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore NFEConsulta.sln
 
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: dotnet build NFEConsulta.sln -c Release --no-restore
 
       - name: Pack
-        run: dotnet pack -c Release --no-build -o ./artifacts
+        run: dotnet pack NFEConsulta.sln -c Release --no-build -o ./artifacts
 
       - name: NuGet Login
         uses: NuGet/login@v1
