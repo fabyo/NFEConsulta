@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <Version>0.1.10</Version>
     <PackageId>NFEConsulta.Cli</PackageId>
     <Title>NFEConsulta CLI</Title>
