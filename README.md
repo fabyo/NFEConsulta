@@ -24,13 +24,13 @@ XML -> valida XSD -> extrai chave -> consulta SEFAZ -> retorna status atual
 Biblioteca:
 
 ```bash
-dotnet add package NFEConsulta --version 0.1.7
+dotnet add package NFEConsulta
 ```
 
 CLI como dotnet tool:
 
 ```bash
-dotnet tool install --global NFEConsulta.Cli --version 0.1.7
+dotnet tool install --global NFEConsulta.Cli
 ```
 
 Depois:
