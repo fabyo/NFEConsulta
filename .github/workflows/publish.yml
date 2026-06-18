@@ -1,4 +1,4 @@
-name: Release
+name: Publish
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  publish-nuget:
+  nuget:
     name: Publish NuGet packages
     runs-on: windows-latest
 
@@ -34,10 +34,10 @@ jobs:
       - name: Build
         run: dotnet build NFEConsulta.sln --configuration Release --no-restore
 
-      - name: Pack Core
+      - name: Pack NFEConsulta
         run: dotnet pack src/NFEConsulta.Core/NFEConsulta.Core.csproj --configuration Release --no-build --output artifacts/packages
 
-      - name: Pack CLI
+      - name: Pack NFEConsulta.Cli
         run: dotnet pack src/NFEConsulta.Cli/NFEConsulta.Cli.csproj --configuration Release --no-build --output artifacts/packages
 
       - name: Publish to NuGet
