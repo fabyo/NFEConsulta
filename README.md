@@ -2,6 +2,13 @@
 
 `NFEConsulta` e uma biblioteca .NET para trabalhar com NF-e:
 
+![Logo](https://raw.githubusercontent.com/fabyo/NFEConsulta/main/logo-200.png)
+
+[![NuGet](https://img.shields.io/nuget/v/NFEDanfe.svg)](https://www.nuget.org/packages/NFEConsulta)
+[![Downloads](https://img.shields.io/nuget/dt/NFEDanfe.svg)](https://www.nuget.org/packages/NFEConsulta)
+[![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEDanfe)](https://github.com/fabyo/NFEConsulta)
+[![License](https://img.shields.io/github/license/fabyo/NFEDanfe)](https://github.com/fabyo/NFEConsulta)
+
 - Validar chave de acesso de 44 digitos.
 - Extrair a chave de acesso de um XML de NF-e.
 - Validar XML contra os schemas XSD oficiais incluídos no pacote.
