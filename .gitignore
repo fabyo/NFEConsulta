@@ -1,0 +1,28 @@
+# Build outputs
+bin/
+obj/
+artifacts/
+
+# Local test and downloaded material
+tests/
+external/
+
+# Sensitive/local data
+certs/
+xml/
+
+# User/machine files
+.vs/
+.vscode/
+*.user
+*.suo
+*.tmp
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# OS files
+Thumbs.db
+.DS_Store

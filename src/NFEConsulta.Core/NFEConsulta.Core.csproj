@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <Version>0.1.4</Version>
+    <PackageId>NFEConsulta</PackageId>
+    <Title>NFEConsulta</Title>
+    <Description>Biblioteca C# para validar chave de acesso NF-e, extrair chave de XML e consultar NF-e na SEFAZ.</Description>
+    <Authors>NFEConsulta</Authors>
+    <PackageTags>nfe;sefaz;nota-fiscal;consulta;xml</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <Content
+      Include="..\..\schemas\**\*.xsd"
+      Pack="true"
+      PackagePath="contentFiles\any\any\schemas\%(RecursiveDir)%(Filename)%(Extension)"
+      PackageCopyToOutput="true" />
+  </ItemGroup>
+
+</Project>

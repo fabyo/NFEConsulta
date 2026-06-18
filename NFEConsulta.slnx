@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NFEConsulta.Api/NFEConsulta.Api.csproj" />
+    <Project Path="src/NFEConsulta.Cli/NFEConsulta.Cli.csproj" />
+    <Project Path="src/NFEConsulta.Core/NFEConsulta.Core.csproj" />
+  </Folder>
+</Solution>
