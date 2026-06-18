@@ -24,13 +24,13 @@ XML -> valida XSD -> extrai chave -> consulta SEFAZ -> retorna status atual
 Biblioteca:
 
 ```bash
-dotnet add package NFEConsulta --version 0.1.6
+dotnet add package NFEConsulta --version 0.1.7
 ```
 
 CLI como dotnet tool:
 
 ```bash
-dotnet tool install --global NFEConsulta.Cli --version 0.1.6
+dotnet tool install --global NFEConsulta.Cli --version 0.1.7
 ```
 
 Depois:
@@ -109,7 +109,7 @@ Exemplos de retorno:
 ### Instalar
 
 ```bash
-dotnet add package NFEConsulta --version 0.1.6
+dotnet add package NFEConsulta --version 0.1.7
 ```
 
 ### Consultar Pela Chave
@@ -339,7 +339,7 @@ Protocolo: 135262397537122
 Instalar:
 
 ```bash
-dotnet tool install --global NFEConsulta.Cli --version 0.1.6
+dotnet tool install --global NFEConsulta.Cli --version 0.1.7
 ```
 
 Consultar pela chave:
@@ -463,8 +463,8 @@ dotnet pack src/NFEConsulta.Cli/NFEConsulta.Cli.csproj -c Release -o artifacts/p
 Saida esperada:
 
 ```text
-artifacts/packages/NFEConsulta.0.1.6.nupkg
-artifacts/packages/NFEConsulta.Cli.0.1.6.nupkg
+artifacts/packages/NFEConsulta.0.1.7.nupkg
+artifacts/packages/NFEConsulta.Cli.0.1.7.nupkg
 ```
 
 ## Observacoes De Seguranca
