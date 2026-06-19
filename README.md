@@ -130,7 +130,7 @@ using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(
     "https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx");
 
 ConsultaNFeResult resultado = await client.ConsultarChaveAsync(
-    "35260632409620000175550010000047711996933150");
+    "99999999999999999999999999999999999999999999");
 
 Console.WriteLine(resultado.Status);
 Console.WriteLine(resultado.CodigoStatus);
@@ -177,7 +177,7 @@ Nesse exemplo:
 using NFEConsulta.Infrastructure;
 
 ChaveAcessoValidationResult result = ChaveAcessoNFe.Validate(
-    "35260632409620000175550010000047711996933150");
+    "99999999999999999999999999999999999999999999");
 
 if (!result.IsValid)
     Console.WriteLine(result.ErrorMessage);
@@ -345,7 +345,7 @@ dotnet tool install --global NFEConsulta.Cli --version 0.1.7
 Consultar pela chave:
 
 ```bash
-nfeconsulta --chave 35260632409620000175550010000047711996933150 --cert-thumbprint <thumbprint>
+nfeconsulta --chave 99999999999999999999999999999999999999999999 --cert-thumbprint <thumbprint>
 ```
 
 Consultar por XML com validacao XSD:
@@ -405,7 +405,7 @@ POST /consultar
 Content-Type: application/json
 
 {
-  "chaveAcesso": "35260632409620000175550010000047711996933150"
+  "chaveAcesso": "99999999999999999999999999999999999999999999"
 }
 ```
 
