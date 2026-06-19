@@ -12,91 +12,171 @@ namespace NFEConsulta.Services;
 public sealed class NFeConsultaClient : IDisposable
 {
     private readonly SefazNFeService _service;
-    private readonly TipoAmbiente _ambiente;
-    private readonly string _urlWebService;
+    private readonly NFeConsultaOptions _options;
     private readonly bool _disposeService;
 
     public NFeConsultaClient(
         SefazNFeService service,
-        TipoAmbiente ambiente,
-        string urlWebService,
+        NFeConsultaOptions options,
         bool disposeService = false)
     {
-        _service = service;
-        _ambiente = ambiente;
-        _urlWebService = string.IsNullOrWhiteSpace(urlWebService)
-            ? throw new ArgumentException("URL do Web Service nao informada.", nameof(urlWebService))
-            : urlWebService;
+        _service = service ?? throw new ArgumentNullException(nameof(service));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
         _disposeService = disposeService;
     }
 
     public Task<ConsultaNFeResult> ConsultarChaveAsync(
         string chaveAcesso,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? correlationId = null)
     {
-        string chaveValidada = ChaveAcessoNFe.RequireValid(chaveAcesso);
-        ConsultaNFeRequest request = new(chaveValidada, _ambiente, _urlWebService);
+        string? resolvedCorrelationId = correlationId ?? _options.CorrelationId;
+        ChaveAcessoValidationResult validation = ChaveAcessoNFe.Validate(chaveAcesso);
+        if (!validation.IsValid)
+        {
+            return Task.FromResult(ConsultaNFeResult.Erro(
+                validation.ErrorMessage ?? "Chave de acesso invalida.",
+                TipoResultadoConsulta.RequisicaoInvalida,
+                correlationId: resolvedCorrelationId));
+        }
+
+        string chaveValidada = validation.ChaveAcesso!;
+        string urlWebService;
+        try
+        {
+            urlWebService = ResolveUrl(chaveValidada);
+        }
+        catch (NotSupportedException ex)
+        {
+            return Task.FromResult(ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.RequisicaoInvalida,
+                correlationId: resolvedCorrelationId));
+        }
+
+        ConsultaNFeRequest request = new(
+            chaveValidada,
+            _options.Ambiente,
+            urlWebService)
+        {
+            RetryCount = _options.RetryCount,
+            CorrelationId = resolvedCorrelationId
+        };
+
         return _service.ConsultarAsync(request, cancellationToken);
     }
 
     public Task<ConsultaNFeResult> ConsultarXmlAsync(
         string xml,
         string? xsdDirectory = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? correlationId = null)
     {
-        if (!string.IsNullOrWhiteSpace(xsdDirectory))
-            NFeXmlValidator.RequireValidXml(xml, xsdDirectory);
+        string? resolvedCorrelationId = correlationId ?? _options.CorrelationId;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(xsdDirectory))
+                NFeXmlValidator.RequireValidXml(xml, xsdDirectory);
 
-        string chave = ChaveAcessoNFe.ExtractFromXml(xml);
-        return ConsultarChaveAsync(chave, cancellationToken);
+            string chave = ChaveAcessoNFe.ExtractFromXml(xml);
+            return ConsultarChaveAsync(chave, cancellationToken, resolvedCorrelationId);
+        }
+        catch (ArgumentException ex)
+        {
+            return Task.FromResult(ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.FalhaXml,
+                correlationId: resolvedCorrelationId));
+        }
     }
 
     public async Task<ConsultaNFeResult> ConsultarXmlAsync(
         Stream xmlStream,
         string? xsdDirectory = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? correlationId = null)
     {
+        string? resolvedCorrelationId = correlationId ?? _options.CorrelationId;
         if (xmlStream is null)
             throw new ArgumentNullException(nameof(xmlStream));
 
         using MemoryStream buffer = new();
         await xmlStream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrWhiteSpace(xsdDirectory))
+        try
         {
+            if (!string.IsNullOrWhiteSpace(xsdDirectory))
+            {
+                buffer.Position = 0;
+                NFeXmlValidationResult validation = await NFeXmlValidator
+                    .ValidateXmlAsync(buffer, xsdDirectory, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (!validation.IsValid)
+                    return ConsultaNFeResult.Erro(
+                        "XML nao passou na validacao XSD: " + string.Join(" | ", validation.Errors),
+                        TipoResultadoConsulta.FalhaXml,
+                        correlationId: resolvedCorrelationId);
+            }
+
             buffer.Position = 0;
-            NFeXmlValidationResult validation = await NFeXmlValidator
-                .ValidateXmlAsync(buffer, xsdDirectory, cancellationToken)
+            string chave = await ChaveAcessoNFe
+                .ExtractFromXmlAsync(buffer, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!validation.IsValid)
-                throw new ArgumentException(
-                    "XML nao passou na validacao XSD: " + string.Join(" | ", validation.Errors));
+            return await ConsultarChaveAsync(chave, cancellationToken, resolvedCorrelationId).ConfigureAwait(false);
         }
-
-        buffer.Position = 0;
-        string chave = await ChaveAcessoNFe
-            .ExtractFromXmlAsync(buffer, cancellationToken)
-            .ConfigureAwait(false);
-
-        return await ConsultarChaveAsync(chave, cancellationToken).ConfigureAwait(false);
+        catch (ArgumentException ex)
+        {
+            return ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.FalhaXml,
+                correlationId: resolvedCorrelationId);
+        }
     }
 
     public async Task<ConsultaNFeResult> ConsultarXmlFileAsync(
         string xmlFilePath,
         string? xsdDirectory = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? correlationId = null)
     {
-        if (!string.IsNullOrWhiteSpace(xsdDirectory))
-            await NFeXmlValidator
-                .RequireValidXmlFileAsync(xmlFilePath, xsdDirectory, cancellationToken)
+        string? resolvedCorrelationId = correlationId ?? _options.CorrelationId;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(xsdDirectory))
+                await NFeXmlValidator
+                    .RequireValidXmlFileAsync(xmlFilePath, xsdDirectory, cancellationToken)
+                    .ConfigureAwait(false);
+
+            string chave = await ChaveAcessoNFe
+                .ExtractFromXmlFileAsync(xmlFilePath, cancellationToken)
                 .ConfigureAwait(false);
 
-        string chave = await ChaveAcessoNFe
-            .ExtractFromXmlFileAsync(xmlFilePath, cancellationToken)
-            .ConfigureAwait(false);
+            return await ConsultarChaveAsync(chave, cancellationToken, resolvedCorrelationId).ConfigureAwait(false);
+        }
+        catch (ArgumentException ex)
+        {
+            return ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.FalhaXml,
+                correlationId: resolvedCorrelationId);
+        }
+    }
 
-        return await ConsultarChaveAsync(chave, cancellationToken).ConfigureAwait(false);
+    public static NFeConsultaClient CriarComCertificado(
+        X509Certificate2 certificado,
+        NFeConsultaOptions options,
+        ILogger<SefazNFeService>? logger = null,
+        bool ignoreServerCertificateErrors = false)
+    {
+        SefazNFeService service = SefazNFeService.CriarComCertificado(
+            certificado,
+            options.Timeout,
+            logger,
+            ignoreServerCertificateErrors);
+
+        return new NFeConsultaClient(service, options, disposeService: true);
     }
 
     public static NFeConsultaClient CriarComCertificado(
@@ -107,13 +187,29 @@ public sealed class NFeConsultaClient : IDisposable
         ILogger<SefazNFeService>? logger = null,
         bool ignoreServerCertificateErrors = false)
     {
+        NFeConsultaOptions options = new()
+        {
+            Ambiente = ambiente,
+            UrlWebServiceOverride = urlWebService,
+            Timeout = timeout ?? TimeSpan.FromSeconds(30)
+        };
+
         SefazNFeService service = SefazNFeService.CriarComCertificado(
             certificado,
-            timeout,
+            options.Timeout,
             logger,
             ignoreServerCertificateErrors);
 
-        return new NFeConsultaClient(service, ambiente, urlWebService, disposeService: true);
+        return new NFeConsultaClient(service, options, disposeService: true);
+    }
+
+    private string ResolveUrl(string chaveAcesso)
+    {
+        if (!string.IsNullOrWhiteSpace(_options.UrlWebServiceOverride))
+            return _options.UrlWebServiceOverride;
+
+        UfNFe uf = _options.Uf ?? SefazEndpointResolver.InferUfFromChave(chaveAcesso);
+        return SefazEndpointResolver.ResolveConsultaProtocolo(uf, _options.Ambiente);
     }
 
     public void Dispose()

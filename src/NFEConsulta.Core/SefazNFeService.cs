@@ -1,8 +1,6 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using NFEConsulta.Infrastructure;
 using NFEConsulta.Models;
@@ -14,7 +12,6 @@ namespace NFEConsulta.Services;
 /// </summary>
 public sealed class SefazNFeService : IDisposable
 {
-    private const string SoapContentType = "application/soap+xml";
     private const string SoapAction = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4/nfeConsultaNF";
 
     private readonly HttpClient _httpClient;
@@ -32,9 +29,10 @@ public sealed class SefazNFeService : IDisposable
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "Iniciando consulta NF-e. Chave: {Chave} | Ambiente: {Ambiente}",
+            "Iniciando consulta NF-e. Chave: {Chave} | Ambiente: {Ambiente} | CorrelationId: {CorrelationId}",
             MascaraChave(request.ChaveAcesso),
-            request.Ambiente);
+            request.Ambiente,
+            request.CorrelationId);
 
         string soapEnvelope;
         try
@@ -44,50 +42,84 @@ public sealed class SefazNFeService : IDisposable
         catch (ArgumentException ex)
         {
             _logger.LogWarning(ex, "Chave de acesso invalida: {Chave}", request.ChaveAcesso);
-            return ConsultaNFeResult.Erro(ex.Message);
+            return ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.RequisicaoInvalida,
+                correlationId: request.CorrelationId);
         }
 
-        using StringContent content = new(soapEnvelope, Encoding.UTF8, SoapContentType);
-        content.Headers.ContentType = new MediaTypeHeaderValue(SoapContentType)
+        HttpResponseMessage response;
+        try
         {
-            CharSet = Encoding.UTF8.WebName
-        };
-        content.Headers.ContentType.Parameters.Add(new NameValueHeaderValue("action", $"\"{SoapAction}\""));
-        content.Headers.Add("SOAPAction", SoapAction);
-
-        using HttpResponseMessage response = await PostAsync(
-            request.UrlWebService,
-            content,
-            cancellationToken).ConfigureAwait(false);
-
-        if (!response.IsSuccessStatusCode)
+            response = await SefazSoapTransport.PostWithRetryAsync(
+                _httpClient,
+                _logger,
+                request.UrlWebService,
+                soapEnvelope,
+                SoapAction,
+                request.RetryCount,
+                "NFeConsultaProtocolo4",
+                request.CorrelationId,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
         {
-            if (response.StatusCode == HttpStatusCode.InternalServerError)
-            {
-                _logger.LogWarning("SEFAZ retornou HTTP 500. Tentando parsear SOAP Fault.");
-            }
-            else
-            {
-                _logger.LogError("HTTP {StatusCode} da SEFAZ", response.StatusCode);
-                return ConsultaNFeResult.Erro($"Erro HTTP {(int)response.StatusCode}: {response.ReasonPhrase}");
-            }
+            return ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.Timeout,
+                correlationId: request.CorrelationId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.FalhaRede,
+                correlationId: request.CorrelationId);
+        }
+        catch (AuthenticationException ex)
+        {
+            return ConsultaNFeResult.Erro(
+                ex.Message,
+                TipoResultadoConsulta.FalhaCertificado,
+                correlationId: request.CorrelationId);
         }
 
-        string xmlResposta = await response.Content
-            .ReadAsStringAsync(cancellationToken)
-            .ConfigureAwait(false);
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == HttpStatusCode.InternalServerError)
+                {
+                    _logger.LogWarning("SEFAZ retornou HTTP 500. Tentando parsear SOAP Fault.");
+                }
+                else
+                {
+                    _logger.LogError("HTTP {StatusCode} da SEFAZ", response.StatusCode);
+                    return ConsultaNFeResult.Erro(
+                        $"Erro HTTP {(int)response.StatusCode}: {response.ReasonPhrase}",
+                        TipoResultadoConsulta.FalhaRede,
+                        respostaSefazRecebida: true,
+                        correlationId: request.CorrelationId);
+                }
+            }
 
-        _logger.LogDebug("Resposta da SEFAZ recebida ({Bytes} bytes)", xmlResposta.Length);
+            string xmlResposta = await response.Content
+                .ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-        ConsultaNFeResult resultado = SefazResponseParser.Parse(xmlResposta);
+            _logger.LogDebug("Resposta da SEFAZ recebida ({Bytes} bytes)", xmlResposta.Length);
 
-        _logger.LogInformation(
-            "Consulta concluida. Status: {Status} | Codigo: {Codigo} | Motivo: {Motivo}",
-            resultado.Status,
-            resultado.CodigoStatus,
-            resultado.Motivo);
+            ConsultaNFeResult resultado = SefazResponseParser.Parse(xmlResposta, request.CorrelationId);
 
-        return resultado;
+            _logger.LogInformation(
+                "Consulta concluida. Status: {Status} | Codigo: {Codigo} | Motivo: {Motivo} | CorrelationId: {CorrelationId}",
+                resultado.Status,
+                resultado.CodigoStatus,
+                resultado.Motivo,
+                resultado.CorrelationId);
+
+            return resultado;
+        }
     }
 
     public static SefazNFeService CriarComCertificado(
@@ -96,49 +128,15 @@ public sealed class SefazNFeService : IDisposable
         ILogger<SefazNFeService>? logger = null,
         bool ignoreServerCertificateErrors = false)
     {
-        HttpClientHandler handler = new()
-        {
-            SslProtocols = SslProtocols.Tls12
-        };
-
-        if (ignoreServerCertificateErrors)
-            handler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-
-        handler.ClientCertificates.Add(certificado);
-
-        HttpClient httpClient = new(handler, disposeHandler: true)
-        {
-            Timeout = timeout ?? TimeSpan.FromSeconds(30)
-        };
+        HttpClient httpClient = SefazSoapTransport.CriarHttpClientComCertificado(
+            certificado,
+            timeout,
+            ignoreServerCertificateErrors);
 
         ILogger<SefazNFeService> resolvedLogger = logger ?? Microsoft.Extensions.Logging.Abstractions
             .NullLogger<SefazNFeService>.Instance;
 
         return new SefazNFeService(httpClient, resolvedLogger);
-    }
-
-    private async Task<HttpResponseMessage> PostAsync(
-        string urlWebService,
-        HttpContent content,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await _httpClient
-                .PostAsync(urlWebService, content, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-        {
-            _logger.LogError(ex, "Timeout na comunicacao com a SEFAZ. URL: {Url}", urlWebService);
-            throw new TimeoutException("Timeout: a SEFAZ nao respondeu no tempo esperado.", ex);
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "Erro de comunicacao HTTP com a SEFAZ");
-            throw new InvalidOperationException($"Erro de rede: {ex.Message}", ex);
-        }
     }
 
     private static string MascaraChave(string chave) =>

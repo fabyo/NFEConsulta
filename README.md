@@ -5,18 +5,51 @@
 [![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 [![License](https://img.shields.io/github/license/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 
-`NFEConsulta` e uma biblioteca .NET para trabalhar com NF-e:
+`NFEConsulta` e uma biblioteca .NET para consultar NF-e com uma API pequena, tipada e pronta para uso em servicos.
 
-- Validar chave de acesso de 44 digitos.
-- Extrair a chave de acesso de um XML de NF-e.
-- Validar XML contra os schemas XSD oficiais incluídos no pacote.
-- Consultar a SEFAZ pela chave para obter o status atual da NF-e.
-- Usar como biblioteca C#, CLI ou API REST interna.
+- Valida chave de acesso de 44 digitos.
+- Extrai chave de XML de NF-e.
+- Valida XML contra schemas XSD oficiais incluidos no pacote.
+- Consulta a SEFAZ pela chave para obter o status atual da NF-e.
+- Consulta a disponibilidade oficial da SEFAZ via `NFeStatusServico4`.
+- Resolve endpoint por UF + ambiente, com SP como default e override opcional.
+- Propaga `CorrelationId` opcional em resultados e logs para rastrear jobs/lotes.
+- Explicita falhas tecnicas, falhas de XML e respostas fiscais negativas.
+- Disponibiliza biblioteca C#, CLI e API REST interna.
 
-Ponto importante: o XML pode estar estruturalmente valido e ainda assim a NF-e pode ter sido cancelada depois. Por isso o fluxo correto e:
+## Diferencial: Status Oficial Da SEFAZ
+
+A biblioteca consegue consultar o status oficial da SEFAZ antes de processar XMLs ou lotes. Isso usa o webservice `NFeStatusServico4`, que retorna `cStat` e `xMotivo`, por exemplo `107 - Servico em Operacao`.
+
+Isso e diferente de ping, teste TCP ou handshake TLS. Ping/TLS so dizem que existe conectividade; `NFeStatusServico4` diz se o servico fiscal esta operacional para a UF e ambiente configurados.
+
+Exemplo:
+
+```csharp
+using NFeStatusClient statusClient = NFeStatusClient.CriarComCertificado(
+    certificado,
+    new NFeConsultaOptions
+    {
+        Ambiente = TipoAmbiente.Homologacao,
+        Uf = UfNFe.SP
+    });
+
+SefazStatusResult status = await statusClient.ConsultarStatusAsync();
+
+if (!status.Online)
+    Console.WriteLine($"{status.CodigoStatus} - {status.Motivo}");
+```
+
+CLI:
+
+```bash
+nfeconsulta status --uf SP --ambiente homologacao --cert-pem certs/cert.pem --key-pem certs/key.pem
+```
+
+Fluxo recomendado:
 
 ```text
-XML -> valida XSD -> extrai chave -> consulta SEFAZ -> retorna status atual
+XML -> valida XSD -> extrai chave -> valida chave -> consulta SEFAZ -> retorna status atual
 ```
 
 ## Pacotes
@@ -33,12 +66,6 @@ CLI como dotnet tool:
 dotnet tool install --global NFEConsulta.Cli
 ```
 
-Depois:
-
-```bash
-nfeconsulta --help
-```
-
 ## Projetos
 
 ```text
@@ -49,70 +76,12 @@ src/NFEConsulta.Cli
   CLI. Vai para o NuGet como dotnet tool NFEConsulta.Cli.
 
 src/NFEConsulta.Api
-  API REST interna. Nao vai para o NuGet; deve ser publicada/deployada como servico.
+  API REST interna. Nao vai para o NuGet; deve ser publicada como servico.
 ```
 
-## Schemas XSD Incluidos
+## Uso Como Biblioteca
 
-O pacote `NFEConsulta` inclui os schemas em:
-
-```text
-schemas/v4
-```
-
-Eles sao empacotados no NuGet como `contentFiles`, entao quem instala a biblioteca recebe os XSDs junto.
-
-Os schemas foram incorporados a partir deste projeto:
-
-https://github.com/fabyo/sefaz-scraper
-
-Use esse link se quiser conhecer, auditar ou atualizar a origem dos XSDs.
-
-## Conceitos
-
-### Validar XML com XSD
-
-Valida se o XML respeita o layout da NF-e.
-
-Isso responde:
-
-```text
-Este XML tem estrutura valida?
-```
-
-Nao responde:
-
-```text
-Esta NF-e ainda esta autorizada hoje?
-```
-
-### Consultar SEFAZ
-
-Consulta a SEFAZ pela chave de acesso.
-
-Isso responde:
-
-```text
-Qual e o status atual dessa NF-e?
-```
-
-Exemplos de retorno:
-
-- `Autorizada`
-- `Cancelada`
-- `Denegada`
-- `NaoEncontrada`
-- `Desconhecido`
-
-## Uso Como Biblioteca C#
-
-### Instalar
-
-```bash
-dotnet add package NFEConsulta --version 0.1.7
-```
-
-### Consultar Pela Chave
+### Consulta Por Chave
 
 ```csharp
 using System.Security.Cryptography.X509Certificates;
@@ -124,58 +93,43 @@ using X509Certificate2 certificado = CertificadoProvider.ObterPorPem(
     "certs/cert.pem",
     "certs/key.pem");
 
+NFeConsultaOptions options = new()
+{
+    Ambiente = TipoAmbiente.Producao,
+    Uf = UfNFe.SP,
+    CorrelationId = "job-20260619-001",
+    Timeout = TimeSpan.FromSeconds(30),
+    RetryCount = 2
+};
+
 using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(
     certificado,
-    TipoAmbiente.Producao,
-    "https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx");
+    options);
 
 ConsultaNFeResult resultado = await client.ConsultarChaveAsync(
     "99999999999999999999999999999999999999999999");
 
 Console.WriteLine(resultado.Status);
+Console.WriteLine(resultado.TipoResultado);
+Console.WriteLine(resultado.CorrelationId);
 Console.WriteLine(resultado.CodigoStatus);
 Console.WriteLine(resultado.Motivo);
 Console.WriteLine(resultado.NumeroProtocolo);
-Console.WriteLine(resultado.DataAutorizacao);
 ```
 
-### Consultar Pelo XML
+### Consulta Por XML
 
 ```csharp
-using System.Security.Cryptography.X509Certificates;
-using NFEConsulta.Infrastructure;
-using NFEConsulta.Models;
-using NFEConsulta.Services;
-
-using X509Certificate2 certificado = CertificadoProvider.ObterPorPem(
-    "certs/cert.pem",
-    "certs/key.pem");
-
-using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(
-    certificado,
-    TipoAmbiente.Producao,
-    "https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx");
-
 ConsultaNFeResult resultado = await client.ConsultarXmlFileAsync(
     "xml/nota.xml",
     xsdDirectory: "schemas/v4");
-
-Console.WriteLine(resultado.Status);
 ```
 
-Nesse exemplo:
-
-- O XML e validado contra XSD.
-- A chave e extraida do XML.
-- A chave e validada.
-- A SEFAZ e consultada.
-- O status atual e retornado.
+Nesse caminho, a biblioteca valida o XML quando `xsdDirectory` e informado, extrai a chave, valida o digito verificador e consulta a SEFAZ.
 
 ### Validar Apenas A Chave
 
 ```csharp
-using NFEConsulta.Infrastructure;
-
 ChaveAcessoValidationResult result = ChaveAcessoNFe.Validate(
     "99999999999999999999999999999999999999999999");
 
@@ -183,101 +137,152 @@ if (!result.IsValid)
     Console.WriteLine(result.ErrorMessage);
 ```
 
-### Extrair Chave Do XML
+### Validar Apenas O XML
 
 ```csharp
-using NFEConsulta.Infrastructure;
-
-string chave = await ChaveAcessoNFe.ExtractFromXmlFileAsync("xml/nota.xml");
-```
-
-### Validar Apenas O XML Contra XSD
-
-```csharp
-using NFEConsulta.Infrastructure;
-
 NFeXmlValidationResult validation = await NFeXmlValidator.ValidateXmlFileAsync(
     "xml/nota.xml",
     "schemas/v4");
 
-if (!validation.IsValid)
+foreach (string error in validation.Errors)
+    Console.WriteLine(error);
+```
+
+## UF, Ambiente E Endpoint
+
+O uso comum nao precisa informar URL. Configure `Ambiente` e `Uf`:
+
+```csharp
+NFeConsultaOptions options = new()
 {
-    foreach (string error in validation.Errors)
-        Console.WriteLine(error);
-}
+    Ambiente = TipoAmbiente.Homologacao,
+    Uf = UfNFe.SP
+};
+```
+
+SP e o default nos projetos CLI e API. Na biblioteca, se `Uf` ficar nula, a UF pode ser inferida pelos dois primeiros digitos da chave de acesso.
+
+Para outro estado:
+
+```csharp
+NFeConsultaOptions options = new()
+{
+    Ambiente = TipoAmbiente.Producao,
+    Uf = UfNFe.MG
+};
+```
+
+Para casos especiais, use override explicito:
+
+```csharp
+NFeConsultaOptions options = new()
+{
+    Ambiente = TipoAmbiente.Homologacao,
+    Uf = UfNFe.SP,
+    CorrelationId = "lote-123",
+    UrlStatusWebServiceOverride = "https://homologacao.nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx",
+    UrlWebServiceOverride = "https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx"
+};
+```
+
+O catalogo de endpoints e conservador: a biblioteca so resolve automaticamente UFs com endpoint conhecido no codigo. UFs sem endpoint confirmado exigem override explicito para evitar chamada fiscal no autorizador errado.
+
+### UFs Com Endpoint Automatico
+
+Endpoints mapeados no resolver atual para `NFeConsultaProtocolo4` e `NFeStatusServico4`:
+
+```text
+AC, AL, AP, DF, ES, PB, PI, RJ, RN, RO, RR, RS, SC, SE, TO -> SVRS
+SP -> SEFAZ-SP
+MG -> SEFAZ-MG
+PR -> SEFAZ-PR
+```
+
+Validacao local realizada nesta revisao:
+
+```text
+SP homologacao -> status oficial SEFAZ + consulta por XML real com certificado local
+```
+
+UFs presentes na tabela, mas sem endpoint confirmado no codigo:
+
+```text
+AM, BA, CE, GO, MA, MT, MS, PA, PE
+```
+
+Para essas UFs, informe `UrlWebServiceOverride`. A biblioteca falha de forma explicita em vez de usar fallback silencioso.
+
+## Resultado Da Consulta
+
+`ConsultaNFeResult` separa retorno fiscal de erro tecnico:
+
+```csharp
+public bool Sucesso { get; init; }
+public string CodigoStatus { get; init; }
+public string Motivo { get; init; }
+public StatusNFe Status { get; init; }
+public TipoResultadoConsulta TipoResultado { get; init; }
+public bool RespostaSefazRecebida { get; init; }
+public string? CorrelationId { get; init; }
+public string? NumeroProtocolo { get; init; }
+public DateTimeOffset? DataAutorizacao { get; init; }
+public string? ErroDetalhado { get; init; }
+```
+
+Tipos principais:
+
+- `ConsultaOk`: resposta SEFAZ reconhecida, como autorizada, cancelada ou denegada.
+- `RespostaSefazNegativa`: a SEFAZ respondeu, mas a nota nao foi encontrada ou a consulta nao resultou em autorizacao.
+- `FalhaRede`, `Timeout`, `FalhaCertificado`, `FalhaXml`, `RequisicaoInvalida`: falha tecnica ou de entrada.
+
+`SefazStatusResult` retorna:
+
+```csharp
+public bool Online { get; init; }
+public string CodigoStatus { get; init; }
+public string Motivo { get; init; }
+public UfNFe Uf { get; init; }
+public TipoAmbiente Ambiente { get; init; }
+public string UrlWebService { get; init; }
+public TimeSpan Duracao { get; init; }
+public TipoResultadoConsulta TipoResultado { get; init; }
+public bool RespostaSefazRecebida { get; init; }
+public string? CorrelationId { get; init; }
+public string? ErroDetalhado { get; init; }
 ```
 
 ## Certificado Digital
 
-A SEFAZ exige certificado digital para consulta. A biblioteca aceita `X509Certificate2`, entao voce pode carregar o certificado de varias formas.
+A SEFAZ exige certificado digital. A biblioteca trabalha com `X509Certificate2` e oferece helpers.
 
-### Opcao 1: PEM
-
-Boa opcao para Linux, containers e ambientes onde voce tem `cert.pem` e `key.pem`.
+PEM:
 
 ```csharp
-using System.Security.Cryptography.X509Certificates;
-using NFEConsulta.Infrastructure;
-
 using X509Certificate2 certificado = CertificadoProvider.ObterPorPem(
     "certs/cert.pem",
     "certs/key.pem");
 ```
 
-### Opcao 2: PFX
-
-Boa opcao quando voce recebeu um arquivo `.pfx`.
-
-Nao coloque a senha no codigo. Use variavel de ambiente:
+PFX:
 
 ```bash
 set NFE_CERT_PASSWORD=minha-senha
 ```
 
-No codigo:
-
 ```csharp
-using System.Security.Cryptography.X509Certificates;
-using NFEConsulta.Infrastructure;
-
 using X509Certificate2 certificado = CertificadoProvider.ObterPorPfx(
     "certificado.pfx",
     Environment.GetEnvironmentVariable("NFE_CERT_PASSWORD"));
 ```
 
-### Opcao 3: Windows Store Por Thumbprint
-
-Recomendado para producao em Windows.
-
-Instale o certificado no store:
-
-```text
-CurrentUser\My
-```
-
-Depois use o thumbprint:
+Windows Store:
 
 ```csharp
-using System.Security.Cryptography.X509Certificates;
-using NFEConsulta.Infrastructure;
-
 using X509Certificate2 certificado = CertificadoProvider.ObterPorThumbprint(
     "ABCDEF123456...");
 ```
 
-### Opcao 4: Windows Store Por Subject
-
-Util para desenvolvimento, mas menos preciso que thumbprint:
-
-```csharp
-using System.Security.Cryptography.X509Certificates;
-using NFEConsulta.Infrastructure;
-
-using X509Certificate2 certificado = CertificadoProvider.ObterPorSubject(
-    "NOME DA EMPRESA");
-```
-
-### Recomendacao
+Recomendacao:
 
 ```text
 Windows producao     -> Thumbprint
@@ -285,106 +290,55 @@ Linux/container      -> PEM ou PFX
 Desenvolvimento      -> PEM, PFX ou Subject
 ```
 
-## Ambientes E URLs
+## CLI
 
-Producao SP:
-
-```text
-https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx
-```
-
-Homologacao SP:
-
-```text
-https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx
-```
-
-Exemplo:
-
-```csharp
-TipoAmbiente.Producao
-```
-
-ou:
-
-```csharp
-TipoAmbiente.Homologacao
-```
-
-## Resultado Da Consulta
-
-`ConsultaNFeResult` retorna:
-
-```csharp
-public bool Sucesso { get; init; }
-public string CodigoStatus { get; init; }
-public string Motivo { get; init; }
-public StatusNFe Status { get; init; }
-public string? NumeroProtocolo { get; init; }
-public DateTimeOffset? DataAutorizacao { get; init; }
-public string? ErroDetalhado { get; init; }
-```
-
-Exemplo de NF-e cancelada:
-
-```text
-Status: Cancelada
-Codigo: 101
-Motivo: Cancelamento registrado
-Protocolo: 135262397537122
-```
-
-## Uso Do CLI
-
-Instalar:
-
-```bash
-dotnet tool install --global NFEConsulta.Cli --version 0.1.7
-```
-
-Consultar pela chave:
+Consultar por chave usando SP homologacao:
 
 ```bash
 nfeconsulta --chave 99999999999999999999999999999999999999999999 --cert-thumbprint <thumbprint>
 ```
 
-Consultar por XML com validacao XSD:
+Consultar status oficial da SEFAZ:
 
 ```bash
-nfeconsulta --xml-file xml/nota.xml --xsd-dir schemas/v4 --cert-pem certs/cert.pem --key-pem certs/key.pem --ambiente producao --url https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx
+nfeconsulta status --uf SP --ambiente homologacao --cert-thumbprint <thumbprint>
 ```
 
-Ler XML via stdin:
+Consultar por XML em outro estado:
 
 ```bash
-type xml/nota.xml | nfeconsulta --xml-stdin --xsd-dir schemas/v4 --cert-pem certs/cert.pem --key-pem certs/key.pem
+nfeconsulta --xml-file xml/nota.xml --xsd-dir schemas/v4 --cert-pem certs/cert.pem --key-pem certs/key.pem --ambiente producao --uf MG
 ```
 
-Parametros de certificado no CLI:
+Override de URL, apenas quando necessario:
+
+```bash
+nfeconsulta --chave 99999999999999999999999999999999999999999999 --cert-thumbprint <thumbprint> --url https://endpoint-customizado
+```
+
+Parametros principais:
 
 ```text
+--chave <valor>
+--xml-file <path>
+--xml-stdin
 --cert-thumbprint <valor>
 --cert-serial <valor>
 --cert-subject <texto>
 --cert-pfx <path>
 --cert-pem <path> --key-pem <path>
+--xsd-dir <path>
+--ambiente <homologacao|producao>
+--uf <sigla>
+--url <url>
+--status-url <url>
+--correlation-id <valor>
+--timeout-seconds <n>
+--retry-count <n>
+--verbose
 ```
 
-Para PFX, use:
-
-```bash
-set NFE_CERT_PASSWORD=minha-senha
-```
-
-## Uso Da API REST Interna
-
-A API e indicada quando outro backend, por exemplo Rust, precisa consultar a SEFAZ por HTTP.
-
-Fluxo:
-
-```text
-Rust backend -> HTTP interno -> NFEConsulta.Api -> SEFAZ
-```
+## API REST Interna
 
 Executar localmente:
 
@@ -396,6 +350,12 @@ Health check:
 
 ```http
 GET /health
+```
+
+Status oficial da SEFAZ:
+
+```http
+GET /sefaz/status
 ```
 
 Consultar por chave:
@@ -426,8 +386,12 @@ Configuracao:
 {
   "Sefaz": {
     "Ambiente": "producao",
-    "UrlWebService": "https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx",
+    "UF": "SP",
+    "UrlWebService": "",
+    "UrlStatusWebService": "",
+    "CorrelationId": "",
     "TimeoutSeconds": 60,
+    "RetryCount": 2,
     "CertThumbprint": "",
     "CertSerial": "",
     "CertSubject": "",
@@ -440,48 +404,73 @@ Configuracao:
 }
 ```
 
-## Build
+## Schemas XSD
+
+O pacote inclui os schemas em `schemas/v4` e os empacota como `contentFiles`.
+
+Origem dos schemas:
+
+https://github.com/fabyo/sefaz-scraper
+
+## Build E Pacote
+
+Build:
 
 ```bash
 dotnet build NFEConsulta.sln
 ```
 
-## Gerar Pacote NuGet
+Testes automatizados sem certificado real:
 
-Biblioteca:
+```bash
+dotnet run --project tests/NFEConsulta.Tests/NFEConsulta.Tests.csproj
+```
+
+Teste de integracao real opcional, usando arquivos locais ignorados pelo Git:
+
+```powershell
+$env:NFE_RUN_INTEGRATION="1"
+$env:NFE_CERT_PEM="certs/cert.pem"
+$env:NFE_KEY_PEM="certs/key.pem"
+$env:NFE_XML_PATH="xml"
+$env:NFE_UF="SP"
+$env:NFE_AMBIENTE="homologacao"
+dotnet run --project tests/NFEConsulta.Tests/NFEConsulta.Tests.csproj
+```
+
+`NFE_XML_PATH` pode apontar para um arquivo XML especifico ou para uma pasta com varios XMLs.
+`certs/` e `xml/` ficam no `.gitignore`. Nao suba certificado, chave privada, senha ou XML real.
+
+Pacote da biblioteca:
 
 ```bash
 dotnet pack src/NFEConsulta.Core/NFEConsulta.Core.csproj -c Release -o artifacts/packages
 ```
 
-CLI:
+A versao publica atual do pacote e `0.2.0`, porque a API passou a expor options tipadas, status oficial SEFAZ, endpoints por UF e resultado com `CorrelationId`.
+
+Pacote do CLI:
 
 ```bash
 dotnet pack src/NFEConsulta.Cli/NFEConsulta.Cli.csproj -c Release -o artifacts/packages
 ```
 
-Saida esperada:
+## Seguranca
 
-```text
-artifacts/packages/NFEConsulta.0.1.7.nupkg
-artifacts/packages/NFEConsulta.Cli.0.1.7.nupkg
-```
+- Nao versione senha de certificado.
+- Prefira thumbprint em Windows producao.
+- Use secret ou variavel de ambiente para senha de PFX.
+- Nao use `IgnoreServerCertificateErrors` em producao.
+- Logue `ErroDetalhado` com cuidado, principalmente em APIs expostas.
+- Valide XML por XSD antes de consultar a SEFAZ quando o XML vier do usuario.
 
-## Observacoes De Seguranca
+## Autor
 
-- Nao versionar senha de certificado.
-- Preferir thumbprint em Windows producao.
-- Preferir secret/variavel de ambiente para senha de PFX.
-- Nao usar `IgnoreServerCertificateErrors` em producao.
-- Validar XML por XSD antes de consultar a SEFAZ quando o XML for fornecido pelo usuario.
-
-## 👨‍💻 Autor
-
-Fabyo Guimarães Oliveira
+Fabyo Guimaraes Oliveira
 
 - LinkedIn: [https://www.linkedin.com/in/fabyo-guimaraes/](https://www.linkedin.com/in/fabyo-guimaraes/)
 - GitHub: https://github.com/fabyo
 
-## Licença
+## Licenca
 
 MIT.

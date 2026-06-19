@@ -14,16 +14,37 @@ builder.Services.AddSefazNFeService(
     certificado,
     options.Timeout,
     options.IgnoreServerCertificateErrors);
+builder.Services.AddSefazStatusService(
+    certificado,
+    options.Timeout,
+    options.IgnoreServerCertificateErrors);
 
 builder.Services.AddTransient<NFeConsultaClient>(serviceProvider =>
 {
     SefazNFeService service = serviceProvider.GetRequiredService<SefazNFeService>();
-    return new NFeConsultaClient(service, options.Ambiente, options.UrlWebService);
+    return new NFeConsultaClient(service, options.ToConsultaOptions());
+});
+builder.Services.AddTransient<NFeStatusClient>(serviceProvider =>
+{
+    SefazStatusService service = serviceProvider.GetRequiredService<SefazStatusService>();
+    return new NFeStatusClient(service, options.ToConsultaOptions());
 });
 
 WebApplication app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")));
+
+app.MapGet("/sefaz/status", async (
+    string? correlationId,
+    NFeStatusClient client,
+    CancellationToken cancellationToken) =>
+{
+    SefazStatusResult result = await client
+        .ConsultarStatusAsync(cancellationToken, correlationId)
+        .ConfigureAwait(false);
+
+    return ToHttpStatusResult(result);
+});
 
 app.MapPost("/consultar", async (
     ConsultaNFeApiRequest request,
@@ -37,16 +58,17 @@ app.MapPost("/consultar", async (
         if (!string.IsNullOrWhiteSpace(request.ChaveAcesso))
         {
             result = await client
-                .ConsultarChaveAsync(request.ChaveAcesso, cancellationToken)
+                .ConsultarChaveAsync(request.ChaveAcesso, cancellationToken, request.CorrelationId)
                 .ConfigureAwait(false);
         }
         else if (!string.IsNullOrWhiteSpace(request.Xml))
         {
-            if (!string.IsNullOrWhiteSpace(options.XsdDirectory))
-                NFeXmlValidator.RequireValidXml(request.Xml, options.XsdDirectory);
-
             result = await client
-                .ConsultarXmlAsync(request.Xml, cancellationToken: cancellationToken)
+                .ConsultarXmlAsync(
+                    request.Xml,
+                    options.XsdDirectory,
+                    cancellationToken,
+                    request.CorrelationId)
                 .ConfigureAwait(false);
         }
         else
@@ -54,7 +76,7 @@ app.MapPost("/consultar", async (
             return Results.BadRequest(new ErrorResponse("Informe chaveAcesso ou xml."));
         }
 
-        return Results.Ok(result);
+        return ToHttpConsultaResult(result);
     }
     catch (ArgumentException ex)
     {
@@ -71,6 +93,24 @@ app.MapPost("/consultar", async (
 });
 
 app.Run();
+
+static IResult ToHttpConsultaResult(ConsultaNFeResult result) => result.TipoResultado switch
+{
+    TipoResultadoConsulta.RequisicaoInvalida or TipoResultadoConsulta.FalhaXml => Results.BadRequest(result),
+    TipoResultadoConsulta.Timeout => Results.Json(result, statusCode: StatusCodes.Status504GatewayTimeout),
+    TipoResultadoConsulta.FalhaRede or TipoResultadoConsulta.FalhaCertificado or TipoResultadoConsulta.FalhaTecnica =>
+        Results.Json(result, statusCode: StatusCodes.Status502BadGateway),
+    _ => Results.Ok(result)
+};
+
+static IResult ToHttpStatusResult(SefazStatusResult result) => result.TipoResultado switch
+{
+    TipoResultadoConsulta.RequisicaoInvalida or TipoResultadoConsulta.FalhaXml => Results.BadRequest(result),
+    TipoResultadoConsulta.Timeout => Results.Json(result, statusCode: StatusCodes.Status504GatewayTimeout),
+    TipoResultadoConsulta.FalhaRede or TipoResultadoConsulta.FalhaCertificado or TipoResultadoConsulta.FalhaTecnica =>
+        Results.Json(result, statusCode: StatusCodes.Status502BadGateway),
+    _ => Results.Ok(result)
+};
 
 static X509Certificate2 ResolveCertificate(SefazApiOptions options)
 {
@@ -100,7 +140,7 @@ static X509Certificate2 ResolveCertificate(SefazApiOptions options)
         "Configure Sefaz:CertThumbprint, Sefaz:CertSerial, Sefaz:CertSubject, Sefaz:CertPfxPath ou Sefaz:CertPemPath com Sefaz:KeyPemPath.");
 }
 
-internal sealed record ConsultaNFeApiRequest(string? ChaveAcesso, string? Xml);
+internal sealed record ConsultaNFeApiRequest(string? ChaveAcesso, string? Xml, string? CorrelationId);
 
 internal sealed record ErrorResponse(string Erro);
 
@@ -116,15 +156,32 @@ internal sealed record SefazApiOptions
     public string? KeyPemPath { get; init; }
     public string? XsdDirectory { get; init; }
     public TipoAmbiente Ambiente { get; init; } = TipoAmbiente.Homologacao;
-    public string UrlWebService { get; init; } = "https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx";
+    public UfNFe? Uf { get; init; } = UfNFe.SP;
+    public string? UrlWebService { get; init; }
+    public string? UrlStatusWebService { get; init; }
+    public string? CorrelationId { get; init; }
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(60);
+    public int RetryCount { get; init; } = 2;
     public bool IgnoreServerCertificateErrors { get; init; }
+
+    public NFeConsultaOptions ToConsultaOptions() => new()
+    {
+        Ambiente = Ambiente,
+        Uf = Uf,
+        UrlWebServiceOverride = UrlWebService,
+        UrlStatusWebServiceOverride = UrlStatusWebService,
+        CorrelationId = CorrelationId,
+        Timeout = Timeout,
+        RetryCount = RetryCount
+    };
 
     public static SefazApiOptions FromConfiguration(IConfiguration configuration)
     {
         IConfigurationSection section = configuration.GetSection("Sefaz");
         string ambiente = section["Ambiente"] ?? "homologacao";
+        string? uf = section["UF"];
         int timeoutSeconds = section.GetValue("TimeoutSeconds", 60);
+        int retryCount = section.GetValue("RetryCount", 2);
 
         return new SefazApiOptions
         {
@@ -136,9 +193,12 @@ internal sealed record SefazApiOptions
             KeyPemPath = section["KeyPemPath"],
             XsdDirectory = section["XsdDirectory"],
             Ambiente = ParseAmbiente(ambiente),
-            UrlWebService = section["UrlWebService"]
-                ?? "https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx",
+            Uf = string.IsNullOrWhiteSpace(uf) ? UfNFe.SP : SefazEndpointResolver.ParseUf(uf),
+            UrlWebService = section["UrlWebService"],
+            UrlStatusWebService = section["UrlStatusWebService"],
+            CorrelationId = section["CorrelationId"],
             Timeout = TimeSpan.FromSeconds(timeoutSeconds > 0 ? timeoutSeconds : 60),
+            RetryCount = retryCount >= 0 ? retryCount : 2,
             IgnoreServerCertificateErrors = section.GetValue("IgnoreServerCertificateErrors", false)
         };
     }

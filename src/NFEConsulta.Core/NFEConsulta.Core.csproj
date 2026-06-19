@@ -2,10 +2,10 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <Version>0.1.11</Version>
+    <Version>0.2.0</Version>
     <PackageId>NFEConsulta</PackageId>
     <Title>NFEConsulta</Title>
-    <Description>Biblioteca C# para validar chave de acesso NF-e, extrair chave de XML e consultar NF-e na SEFAZ.</Description>
+    <Description>Biblioteca C# para validar chave de acesso NF-e, extrair XML, consultar NF-e e verificar status oficial da SEFAZ.</Description>
     <Authors>NFEConsulta</Authors>
     <PackageTags>nfe;sefaz;nota-fiscal;consulta;xml</PackageTags>
     <RepositoryType>git</RepositoryType>

@@ -28,16 +28,34 @@ Console.CancelKeyPress += (_, e) =>
 try
 {
     using X509Certificate2 certificado = ResolveCertificate(options);
+    NFeConsultaOptions consultaOptions = options.ToConsultaOptions();
+
+    if (options.Command == CliCommand.Status)
+    {
+        using NFeStatusClient statusClient = NFeStatusClient.CriarComCertificado(
+            certificado,
+            consultaOptions,
+            loggerFactory.CreateLogger<SefazStatusService>(),
+            options.IgnoreServerCertificateErrors);
+
+        SefazStatusResult status = await statusClient
+            .ConsultarStatusAsync(cts.Token, options.CorrelationId)
+            .ConfigureAwait(false);
+
+        PrintStatus(status);
+        return status.Online ? 0 : 2;
+    }
+
     using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(
         certificado,
-        options.Ambiente,
-        options.UrlWebService,
-        options.Timeout,
+        consultaOptions,
         loggerFactory.CreateLogger<SefazNFeService>(),
         options.IgnoreServerCertificateErrors);
 
     string chave = await ResolveChaveAsync(options, cts.Token).ConfigureAwait(false);
-    ConsultaNFeResult resultado = await client.ConsultarChaveAsync(chave, cts.Token).ConfigureAwait(false);
+    ConsultaNFeResult resultado = await client
+        .ConsultarChaveAsync(chave, cts.Token, options.CorrelationId)
+        .ConfigureAwait(false);
 
     PrintResult(resultado, chave);
     return resultado.Sucesso ? 0 : 2;
@@ -128,6 +146,8 @@ static void PrintResult(ConsultaNFeResult result, string chave)
 {
     Console.WriteLine($"Chave: {chave}");
     Console.WriteLine($"Status: {result.Status}");
+    Console.WriteLine($"TipoResultado: {result.TipoResultado}");
+    Console.WriteLine($"CorrelationId: {result.CorrelationId}");
     Console.WriteLine($"Codigo: {result.CodigoStatus}");
     Console.WriteLine($"Motivo: {result.Motivo}");
 
@@ -141,8 +161,30 @@ static void PrintResult(ConsultaNFeResult result, string chave)
         Console.WriteLine($"Erro: {result.ErroDetalhado}");
 }
 
+static void PrintStatus(SefazStatusResult result)
+{
+    Console.WriteLine($"UF: {result.Uf}");
+    Console.WriteLine($"Ambiente: {result.Ambiente}");
+    Console.WriteLine($"Online: {result.Online}");
+    Console.WriteLine($"TipoResultado: {result.TipoResultado}");
+    Console.WriteLine($"CorrelationId: {result.CorrelationId}");
+    Console.WriteLine($"Codigo: {result.CodigoStatus}");
+    Console.WriteLine($"Motivo: {result.Motivo}");
+    Console.WriteLine($"DuracaoMs: {result.Duracao.TotalMilliseconds:F0}");
+
+    if (!string.IsNullOrWhiteSpace(result.ErroDetalhado))
+        Console.WriteLine($"Erro: {result.ErroDetalhado}");
+}
+
+internal enum CliCommand
+{
+    Consultar,
+    Status
+}
+
 internal sealed record CliOptions
 {
+    public CliCommand Command { get; init; } = CliCommand.Consultar;
     public string? ChaveAcesso { get; init; }
     public string? XmlFilePath { get; init; }
     public bool ReadXmlFromStdIn { get; init; }
@@ -154,11 +196,26 @@ internal sealed record CliOptions
     public string? KeyPemPath { get; init; }
     public string? XsdDirectory { get; init; }
     public TipoAmbiente Ambiente { get; init; } = TipoAmbiente.Homologacao;
-    public string UrlWebService { get; init; } = "https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx";
+    public UfNFe? Uf { get; init; } = UfNFe.SP;
+    public string? UrlWebService { get; init; }
+    public string? UrlStatusWebService { get; init; }
+    public string? CorrelationId { get; init; }
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(60);
+    public int RetryCount { get; init; } = 2;
     public bool Verbose { get; init; }
     public bool ShowHelp { get; init; }
     public bool IgnoreServerCertificateErrors { get; init; }
+
+    public NFeConsultaOptions ToConsultaOptions() => new()
+    {
+        Ambiente = Ambiente,
+        Uf = Uf,
+        UrlWebServiceOverride = UrlWebService,
+        UrlStatusWebServiceOverride = UrlStatusWebService,
+        CorrelationId = CorrelationId,
+        Timeout = Timeout,
+        RetryCount = RetryCount
+    };
 
     public static CliOptions Parse(string[] args)
     {
@@ -169,6 +226,7 @@ internal sealed record CliOptions
             string arg = args[i];
             options = arg switch
             {
+                "status" => options with { Command = CliCommand.Status },
                 "--help" or "-h" => options with { ShowHelp = true },
                 "--verbose" or "-v" => options with { Verbose = true },
                 "--xml-stdin" => options with { ReadXmlFromStdIn = true },
@@ -183,8 +241,12 @@ internal sealed record CliOptions
                 "--key-pem" => options with { KeyPemPath = RequireValue(args, ref i, arg) },
                 "--xsd-dir" => options with { XsdDirectory = RequireValue(args, ref i, arg) },
                 "--ambiente" => options with { Ambiente = ParseAmbiente(RequireValue(args, ref i, arg)) },
+                "--uf" => options with { Uf = SefazEndpointResolver.ParseUf(RequireValue(args, ref i, arg)) },
                 "--url" => options with { UrlWebService = RequireValue(args, ref i, arg) },
+                "--status-url" => options with { UrlStatusWebService = RequireValue(args, ref i, arg) },
+                "--correlation-id" => options with { CorrelationId = RequireValue(args, ref i, arg) },
                 "--timeout-seconds" => options with { Timeout = TimeSpan.FromSeconds(ParsePositiveInt(RequireValue(args, ref i, arg), arg)) },
+                "--retry-count" => options with { RetryCount = ParseNonNegativeInt(RequireValue(args, ref i, arg), arg) },
                 _ => throw new ArgumentException($"Argumento desconhecido: {arg}")
             };
         }
@@ -198,6 +260,7 @@ internal sealed record CliOptions
         Console.WriteLine("  nfeconsulta --chave <44 digitos> --cert-thumbprint <thumbprint>");
         Console.WriteLine("  nfeconsulta --xml-file nota.xml --cert-thumbprint <thumbprint>");
         Console.WriteLine("  type nota.xml | nfeconsulta --xml-stdin --cert-thumbprint <thumbprint>");
+        Console.WriteLine("  nfeconsulta status --uf SP --cert-thumbprint <thumbprint>");
         Console.WriteLine();
         Console.WriteLine("Parametros:");
         Console.WriteLine("  --chave <valor>             Chave de acesso NF-e com 44 digitos.");
@@ -211,8 +274,12 @@ internal sealed record CliOptions
         Console.WriteLine("  --key-pem <path>            Arquivo PEM da chave privada.");
         Console.WriteLine("  --xsd-dir <path>            Diretorio com XSDs oficiais para validar XML antes da consulta.");
         Console.WriteLine("  --ambiente <homologacao|producao>  Padrao: homologacao.");
-        Console.WriteLine("  --url <url>                 URL do Web Service SEFAZ.");
+        Console.WriteLine("  --uf <sigla>                UF para resolver endpoint. Se omitida, infere pela chave.");
+        Console.WriteLine("  --url <url>                 Override avancado da URL do Web Service SEFAZ.");
+        Console.WriteLine("  --status-url <url>          Override avancado da URL do Status Servico SEFAZ.");
+        Console.WriteLine("  --correlation-id <valor>    Identificador para rastrear consulta em logs e resultado.");
         Console.WriteLine("  --timeout-seconds <n>       Padrao: 60.");
+        Console.WriteLine("  --retry-count <n>           Retries curtos para falhas transitorias. Padrao: 2.");
         Console.WriteLine("  --verbose                   Logs detalhados.");
         Console.WriteLine("  --ignore-server-certificate-errors  Ignora erros TLS do servidor. Evite em producao.");
     }
@@ -238,4 +305,9 @@ internal sealed record CliOptions
         int.TryParse(value, out int result) && result > 0
             ? result
             : throw new ArgumentException($"{optionName} deve ser um numero inteiro positivo.");
+
+    private static int ParseNonNegativeInt(string value, string optionName) =>
+        int.TryParse(value, out int result) && result >= 0
+            ? result
+            : throw new ArgumentException($"{optionName} deve ser um numero inteiro maior ou igual a zero.");
 }

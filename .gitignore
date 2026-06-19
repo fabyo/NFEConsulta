@@ -4,8 +4,10 @@ obj/
 artifacts/
 
 # Local test and downloaded material
-tests/
 external/
+.local/
+tests/NFEConsulta.Consumer/
+tests/NFEConsulta.ToolSmoke/
 
 # Sensitive/local data
 certs/

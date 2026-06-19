@@ -7,7 +7,7 @@ public static class SefazResponseParser
 {
     private static readonly XNamespace Nfe = "http://www.portalfiscal.inf.br/nfe";
 
-    public static ConsultaNFeResult Parse(string xmlResposta)
+    public static ConsultaNFeResult Parse(string xmlResposta, string? correlationId = null)
     {
         XDocument doc;
         try
@@ -16,23 +16,31 @@ public static class SefazResponseParser
         }
         catch (Exception ex)
         {
-            return ConsultaNFeResult.Erro($"Resposta da SEFAZ nao e um XML valido: {ex.Message}");
+            return ConsultaNFeResult.Erro(
+                $"Resposta da SEFAZ nao e um XML valido: {ex.Message}",
+                TipoResultadoConsulta.FalhaXml,
+                respostaSefazRecebida: true,
+                correlationId: correlationId);
         }
 
         // retConsSitNFe traz o status atual da consulta. Ele deve ter prioridade
         // sobre infProt, pois uma NF-e cancelada ainda carrega o protocolo original.
         XElement? retConsSit = doc.Descendants(Nfe + "retConsSitNFe").FirstOrDefault();
         if (retConsSit is not null)
-            return ParseRetConsSit(retConsSit);
+            return ParseRetConsSit(retConsSit, correlationId);
 
         XElement? infProt = doc.Descendants(Nfe + "infProt").FirstOrDefault();
         if (infProt is not null)
-            return ParseInfProt(infProt);
+            return ParseInfProt(infProt, correlationId);
 
-        return ConsultaNFeResult.Erro("Estrutura da resposta da SEFAZ nao reconhecida.");
+        return ConsultaNFeResult.Erro(
+            "Estrutura da resposta da SEFAZ nao reconhecida.",
+            TipoResultadoConsulta.FalhaXml,
+            respostaSefazRecebida: true,
+            correlationId: correlationId);
     }
 
-    private static ConsultaNFeResult ParseInfProt(XElement infProt)
+    private static ConsultaNFeResult ParseInfProt(XElement infProt, string? correlationId)
     {
         string cStat = infProt.Element(Nfe + "cStat")?.Value ?? string.Empty;
         string xMotivo = infProt.Element(Nfe + "xMotivo")?.Value ?? string.Empty;
@@ -48,25 +56,28 @@ public static class SefazResponseParser
             CodigoStatus = cStat,
             Motivo = xMotivo,
             Status = ResolverStatus(cStat),
+            TipoResultado = ResolverTipoResultado(ResolverStatus(cStat)),
+            RespostaSefazRecebida = true,
+            CorrelationId = correlationId,
             NumeroProtocolo = nProt,
             DataAutorizacao = dhRecbto
         };
     }
 
-    private static ConsultaNFeResult ParseRetConsSit(XElement retConsSit)
+    private static ConsultaNFeResult ParseRetConsSit(XElement retConsSit, string? correlationId)
     {
         string cStat = retConsSit.Element(Nfe + "cStat")?.Value ?? string.Empty;
         string xMotivo = retConsSit.Element(Nfe + "xMotivo")?.Value ?? string.Empty;
         StatusNFe status = ResolverStatus(cStat);
 
         if (status == StatusNFe.Cancelada)
-            return ParseCancelamento(retConsSit, cStat, xMotivo);
+            return ParseCancelamento(retConsSit, cStat, xMotivo, correlationId);
 
         if (status is StatusNFe.Autorizada or StatusNFe.Denegada)
         {
             XElement? infProt = retConsSit.Descendants(Nfe + "infProt").FirstOrDefault();
             if (infProt is not null)
-                return ParseInfProt(infProt);
+                return ParseInfProt(infProt, correlationId);
         }
 
         return new ConsultaNFeResult
@@ -75,13 +86,20 @@ public static class SefazResponseParser
             CodigoStatus = cStat,
             Motivo = xMotivo,
             Status = status,
+            TipoResultado = ResolverTipoResultado(status),
+            RespostaSefazRecebida = true,
+            CorrelationId = correlationId,
             ErroDetalhado = status == StatusNFe.Desconhecido
                 ? $"Aviso do WebService SEFAZ: [{cStat}] {xMotivo}"
                 : null
         };
     }
 
-    private static ConsultaNFeResult ParseCancelamento(XElement retConsSit, string cStat, string xMotivo)
+    private static ConsultaNFeResult ParseCancelamento(
+        XElement retConsSit,
+        string cStat,
+        string xMotivo,
+        string? correlationId)
     {
         XElement? retEvento = retConsSit.Descendants(Nfe + "retEvento").FirstOrDefault();
         XElement? infEvento = retEvento?.Element(Nfe + "infEvento");
@@ -110,6 +128,9 @@ public static class SefazResponseParser
             CodigoStatus = cStat,
             Motivo = motivo,
             Status = StatusNFe.Cancelada,
+            TipoResultado = TipoResultadoConsulta.ConsultaOk,
+            RespostaSefazRecebida = true,
+            CorrelationId = correlationId,
             NumeroProtocolo = protocoloCancelamento,
             DataAutorizacao = dataCancelamento
         };
@@ -122,5 +143,12 @@ public static class SefazResponseParser
         "110" or "301" or "302" => StatusNFe.Denegada,
         "217" => StatusNFe.NaoEncontrada,
         _ => StatusNFe.Desconhecido
+    };
+
+    private static TipoResultadoConsulta ResolverTipoResultado(StatusNFe status) => status switch
+    {
+        StatusNFe.Autorizada or StatusNFe.Cancelada or StatusNFe.Denegada => TipoResultadoConsulta.ConsultaOk,
+        StatusNFe.NaoEncontrada => TipoResultadoConsulta.RespostaSefazNegativa,
+        _ => TipoResultadoConsulta.Desconhecido
     };
 }
