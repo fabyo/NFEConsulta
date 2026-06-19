@@ -81,6 +81,22 @@ src/NFEConsulta.Api
 
 ## Uso Como Biblioteca
 
+### Namespaces
+
+Os tipos publicos estao organizados assim:
+
+```csharp
+using NFEConsulta.Infrastructure; // ChaveAcessoNFe, NFeXmlValidator, CertificadoProvider, SefazEndpointResolver
+using NFEConsulta.Models;         // NFeConsultaOptions, ConsultaNFeResult, SefazStatusResult, enums
+using NFEConsulta.Services;       // NFeConsultaClient, NFeStatusClient
+```
+
+Se o compilador nao encontrar `NFeXmlValidator`, confira se o arquivo tem:
+
+```csharp
+using NFEConsulta.Infrastructure;
+```
+
 ### Consulta Por Chave
 
 ```csharp
@@ -130,6 +146,8 @@ Nesse caminho, a biblioteca valida o XML quando `xsdDirectory` e informado, extr
 ### Validar Apenas A Chave
 
 ```csharp
+using NFEConsulta.Infrastructure;
+
 ChaveAcessoValidationResult result = ChaveAcessoNFe.Validate(
     "99999999999999999999999999999999999999999999");
 
@@ -140,6 +158,8 @@ if (!result.IsValid)
 ### Validar Apenas O XML
 
 ```csharp
+using NFEConsulta.Infrastructure;
+
 NFeXmlValidationResult validation = await NFeXmlValidator.ValidateXmlFileAsync(
     "xml/nota.xml",
     "schemas/v4");
@@ -513,7 +533,7 @@ Pacote da biblioteca:
 dotnet pack src/NFEConsulta.Core/NFEConsulta.Core.csproj -c Release -o artifacts/packages
 ```
 
-A versao publica atual do pacote e `0.2.1`, porque a API passou a expor options tipadas, status oficial SEFAZ, endpoints por UF, `CorrelationId` e helpers de decisao para workers.
+A versao publica atual do pacote e `0.2.2`, porque a API passou a expor options tipadas, status oficial SEFAZ, endpoints por UF, `CorrelationId`, helpers de decisao para workers e documentacao explicita de namespaces.
 
 Pacote do CLI:
 
