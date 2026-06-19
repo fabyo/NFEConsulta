@@ -2,10 +2,20 @@
 
 [![NuGet](https://img.shields.io/nuget/v/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
 [![Downloads](https://img.shields.io/nuget/dt/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
+[![CI](https://github.com/fabyo/NFEConsulta/actions/workflows/ci.yml/badge.svg)](https://github.com/fabyo/NFEConsulta/actions/workflows/ci.yml)
 [![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 [![License](https://img.shields.io/github/license/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 
 `NFEConsulta` e uma biblioteca .NET para consultar NF-e com uma API pequena, tipada e pronta para uso em servicos.
+
+Documentacao principal:
+
+- [Documentation Home](docs/README.md)
+- [Getting Started](docs/getting-started.md)
+- [API Reference](docs/api-reference.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Contributing](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 - Valida chave de acesso de 44 digitos.
 - Extrai chave de XML de NF-e.
@@ -89,6 +99,7 @@ Os tipos publicos estao organizados assim:
 using NFEConsulta.Infrastructure; // ChaveAcessoNFe, NFeXmlValidator, CertificadoProvider, SefazEndpointResolver
 using NFEConsulta.Models;         // NFeConsultaOptions, ConsultaNFeResult, SefazStatusResult, enums
 using NFEConsulta.Services;       // NFeConsultaClient, NFeStatusClient
+using NFEConsulta.Extensions;     // AddSefazNFeService, AddSefazStatusService
 ```
 
 Se o compilador nao encontrar `NFeXmlValidator`, confira se o arquivo tem:
@@ -533,7 +544,7 @@ Pacote da biblioteca:
 dotnet pack src/NFEConsulta.Core/NFEConsulta.Core.csproj -c Release -o artifacts/packages
 ```
 
-A versao publica atual do pacote e `0.2.2`, porque a API passou a expor options tipadas, status oficial SEFAZ, endpoints por UF, `CorrelationId`, helpers de decisao para workers e documentacao explicita de namespaces.
+A versao publica atual do pacote e `0.2.3`, porque a API passou a expor options tipadas, status oficial SEFAZ, endpoints por UF, `CorrelationId`, helpers de decisao para workers e documentacao explicita de namespaces.
 
 Pacote do CLI:
 
