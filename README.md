@@ -6,7 +6,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 [![License](https://img.shields.io/github/license/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 
-`NFEConsulta` e uma biblioteca .NET para consultar NF-e com uma API pequena, tipada e pronta para uso em servicos.
+`NFEConsulta` é uma biblioteca .NET para consultar NF-e.
 
 Documentacao principal:
 
