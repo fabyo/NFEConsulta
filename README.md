@@ -235,6 +235,14 @@ Tipos principais:
 - `RespostaSefazNegativa`: a SEFAZ respondeu, mas a nota nao foi encontrada ou a consulta nao resultou em autorizacao.
 - `FalhaRede`, `Timeout`, `FalhaCertificado`, `FalhaXml`, `RequisicaoInvalida`: falha tecnica ou de entrada.
 
+Helpers para workers:
+
+```csharp
+result.DeveRetentarComBackoff
+result.RequerCorrecaoDeEntrada
+result.RequerAlertaOperacional
+```
+
 `SefazStatusResult` retorna:
 
 ```csharp
@@ -249,6 +257,64 @@ public TipoResultadoConsulta TipoResultado { get; init; }
 public bool RespostaSefazRecebida { get; init; }
 public string? CorrelationId { get; init; }
 public string? ErroDetalhado { get; init; }
+```
+
+Helpers para agendamento:
+
+```csharp
+status.ServicoEmOperacao
+status.ServicoEmProcessamento
+status.ServicoParalisado
+status.DeveReagendarProcessamento
+status.RequerAlertaOperacional
+```
+
+`cStat` comuns no status oficial:
+
+```text
+107 -> Servico em operacao
+108 -> Servico paralisado momentaneamente / processamento
+109 -> Servico paralisado
+```
+
+## Uso Em Workers E Filas
+
+Carregue o certificado uma vez no startup e reaproveite a instancia/configuracao no ciclo de vida do worker. Evite ler PEM/PFX do disco a cada mensagem.
+
+Politica recomendada:
+
+```text
+FalhaXml / RequisicaoInvalida:
+  Persistir erro, finalizar mensagem e nao retentar automaticamente.
+
+FalhaRede / Timeout / FalhaTecnica:
+  Retentar pelo mecanismo da fila com backoff.
+
+FalhaCertificado:
+  Pausar processamento fiscal e alertar operacao/configuracao.
+
+RespostaSefazNegativa em status SEFAZ com cStat 108/109:
+  Reagendar lote/job para depois. Nao tratar como XML invalido.
+
+ConsultaOk:
+  Persistir resultado fiscal.
+```
+
+Exemplo:
+
+```csharp
+if (resultado.RequerCorrecaoDeEntrada)
+{
+    // persiste erro definitivo do documento
+}
+else if (resultado.DeveRetentarComBackoff)
+{
+    // deixa a fila/agendador retentar com backoff
+}
+else if (resultado.RequerAlertaOperacional)
+{
+    // alerta problema de certificado/configuracao
+}
 ```
 
 ## Certificado Digital
@@ -447,7 +513,7 @@ Pacote da biblioteca:
 dotnet pack src/NFEConsulta.Core/NFEConsulta.Core.csproj -c Release -o artifacts/packages
 ```
 
-A versao publica atual do pacote e `0.2.0`, porque a API passou a expor options tipadas, status oficial SEFAZ, endpoints por UF e resultado com `CorrelationId`.
+A versao publica atual do pacote e `0.2.1`, porque a API passou a expor options tipadas, status oficial SEFAZ, endpoints por UF, `CorrelationId` e helpers de decisao para workers.
 
 Pacote do CLI:
 

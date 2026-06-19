@@ -43,6 +43,17 @@ public record ConsultaNFeResult
 
     public bool EhRespostaSefazNegativa => TipoResultado == TipoResultadoConsulta.RespostaSefazNegativa;
 
+    public bool DeveRetentarComBackoff => TipoResultado is
+        TipoResultadoConsulta.FalhaRede or
+        TipoResultadoConsulta.Timeout or
+        TipoResultadoConsulta.FalhaTecnica;
+
+    public bool RequerCorrecaoDeEntrada => TipoResultado is
+        TipoResultadoConsulta.FalhaXml or
+        TipoResultadoConsulta.RequisicaoInvalida;
+
+    public bool RequerAlertaOperacional => TipoResultado == TipoResultadoConsulta.FalhaCertificado;
+
     public static ConsultaNFeResult Erro(
         string mensagem,
         TipoResultadoConsulta tipoResultado = TipoResultadoConsulta.FalhaTecnica,
@@ -79,6 +90,20 @@ public record SefazStatusResult
         TipoResultadoConsulta.Timeout or
         TipoResultadoConsulta.RequisicaoInvalida or
         TipoResultadoConsulta.FalhaTecnica;
+
+    public bool ServicoEmOperacao => CodigoStatus == "107";
+
+    public bool ServicoEmProcessamento => CodigoStatus == "108";
+
+    public bool ServicoParalisado => CodigoStatus == "109";
+
+    public bool DeveReagendarProcessamento => ServicoEmProcessamento
+        || ServicoParalisado
+        || TipoResultado is TipoResultadoConsulta.FalhaRede
+            or TipoResultadoConsulta.Timeout
+            or TipoResultadoConsulta.FalhaTecnica;
+
+    public bool RequerAlertaOperacional => TipoResultado == TipoResultadoConsulta.FalhaCertificado;
 
     public static SefazStatusResult Erro(
         string mensagem,

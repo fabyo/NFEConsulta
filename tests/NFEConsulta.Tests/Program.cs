@@ -16,6 +16,8 @@ List<(string Name, Func<Task> Run)> tests =
     ("Parser reconhece cancelada", TestParserCancelada),
     ("Parser reconhece nao encontrada", TestParserNaoEncontrada),
     ("Parser classifica XML invalido", TestParserXmlInvalido),
+    ("Resultado orienta politica de retry", TestPoliticaResultadoConsulta),
+    ("Status orienta reagendamento fiscal", TestPoliticaStatusSefaz),
     ("Endpoint resolve SP default", TestEndpointSp),
     ("Endpoint status resolve SP default", TestEndpointStatusSp),
     ("Endpoint resolve UF por chave", TestEndpointPorChave),
@@ -131,6 +133,36 @@ static Task TestParserXmlInvalido()
     Assert.False(result.Sucesso, "XML invalido deveria falhar.");
     Assert.Equal(TipoResultadoConsulta.FalhaXml, result.TipoResultado);
     Assert.True(result.RespostaSefazRecebida, "A falha veio da resposta recebida.");
+    return Task.CompletedTask;
+}
+
+static Task TestPoliticaResultadoConsulta()
+{
+    ConsultaNFeResult timeout = ConsultaNFeResult.Erro("timeout", TipoResultadoConsulta.Timeout);
+    ConsultaNFeResult xml = ConsultaNFeResult.Erro("xml", TipoResultadoConsulta.FalhaXml);
+    ConsultaNFeResult certificado = ConsultaNFeResult.Erro("certificado", TipoResultadoConsulta.FalhaCertificado);
+
+    Assert.True(timeout.DeveRetentarComBackoff, "Timeout deveria orientar retry com backoff.");
+    Assert.False(xml.DeveRetentarComBackoff, "FalhaXml nao deveria orientar retry automatico.");
+    Assert.True(xml.RequerCorrecaoDeEntrada, "FalhaXml deveria exigir correcao de entrada.");
+    Assert.True(certificado.RequerAlertaOperacional, "FalhaCertificado deveria exigir alerta operacional.");
+
+    return Task.CompletedTask;
+}
+
+static Task TestPoliticaStatusSefaz()
+{
+    SefazStatusResult processamento = SefazStatusResponseParser.Parse(
+        TestData.RespostaStatusProcessamento,
+        UfNFe.SP,
+        TipoAmbiente.Homologacao,
+        "https://sefaz.test",
+        TimeSpan.FromMilliseconds(100));
+
+    Assert.False(processamento.Online, "Status 108 nao deveria indicar online.");
+    Assert.True(processamento.ServicoEmProcessamento, "Status 108 deveria indicar servico em processamento.");
+    Assert.True(processamento.DeveReagendarProcessamento, "Status 108 deveria orientar reagendamento.");
+
     return Task.CompletedTask;
 }
 
@@ -534,6 +566,16 @@ internal static class TestData
             </nfeResultMsg>
           </soap:Body>
         </soap:Envelope>
+        """;
+
+    public const string RespostaStatusProcessamento = """
+        <retConsStatServ xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+          <tpAmb>2</tpAmb>
+          <verAplic>TEST</verAplic>
+          <cStat>108</cStat>
+          <xMotivo>Servico Paralisado Momentaneamente (curto prazo)</xMotivo>
+          <cUF>35</cUF>
+        </retConsStatServ>
         """;
 }
 
