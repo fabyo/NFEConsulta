@@ -1,8 +1,8 @@
-# Getting Started
+# Guia Inicial
 
 `NFEConsulta` valida XML/chave de NF-e e consulta a SEFAZ com contratos tipados.
 
-## Instalar
+## Instalacao
 
 ```bash
 dotnet add package NFEConsulta

@@ -1,6 +1,6 @@
-# API Reference
+# Referencia da API
 
-## Namespaces
+## Espacos de nomes
 
 ```csharp
 using NFEConsulta.Infrastructure;
@@ -19,12 +19,12 @@ using NFEConsulta.Extensions;
 - `ChaveAcessoNFe`
 - `NFeXmlValidator`
 
-## Dependency Injection
+## Injecao de dependencia
 
 - `AddSefazNFeService`
 - `AddSefazStatusService`
 
-## Policies
+## Politicas
 
 - `ConsultaNFeResult.DeveRetentarComBackoff`
 - `ConsultaNFeResult.RequerCorrecaoDeEntrada`
@@ -34,6 +34,6 @@ using NFEConsulta.Extensions;
 - `SefazStatusResult.ServicoParalisado`
 - `SefazStatusResult.DeveReagendarProcessamento`
 
-## Version
+## Versao
 
 Pacote atual: `0.2.3`.

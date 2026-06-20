@@ -1,23 +1,25 @@
-# Documentation
+# Documentacao
 
-Use this hub to navigate the project documentation.
+Use esta pagina para navegar pela documentacao do projeto.
 
-## Start Here
+## Comece aqui
 
-- [Getting Started](getting-started.md)
-- [API Reference](api-reference.md)
-- [Troubleshooting](troubleshooting.md)
+- [Guia inicial](getting-started.md)
+- [Referencia da API](api-reference.md)
+- [Solucao de problemas](troubleshooting.md)
+- [Uso da biblioteca](uso.md)
+- [Integracao interna](integracao-interna.md)
 
-## Project Files
+## Arquivos do projeto
 
 - [README](../README.md)
-- [Contributing](../CONTRIBUTING.md)
-- [Changelog](../CHANGELOG.md)
+- [Contribuindo](../CONTRIBUTING.md)
+- [Historico de alteracoes](../CHANGELOG.md)
 
-## Recommended Reading Order
+## Ordem sugerida de leitura
 
-1. Getting Started
-2. API Reference
-3. Troubleshooting
-4. Contributing
-5. Changelog
+1. Guia inicial
+2. Referencia da API
+3. Solucao de problemas
+4. Contribuindo
+5. Historico de alteracoes

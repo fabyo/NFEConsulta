@@ -1,4 +1,4 @@
-# Contributing
+# Contribuindo
 
 Contribuicoes sao bem-vindas quando mantem o projeto pequeno, previsivel e seguro para uso fiscal.
 

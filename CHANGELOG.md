@@ -1,4 +1,4 @@
-# Changelog
+# Historico de alteracoes
 
 ## 0.2.3
 - Organizada a documentacao publica com hub, guias e contribuicao.

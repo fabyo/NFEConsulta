@@ -1,22 +1,21 @@
 ---
-name: Bug report
-about: Report a defect or unexpected behavior
-title: "[bug]"
+name: Relato de bug
+about: Informe um defeito ou comportamento inesperado
+title: "[erro]"
 labels: bug
 ---
 
-## What happened
+## O que aconteceu
 
-## Expected behavior
+## Comportamento esperado
 
-## Reproduction steps
+## Passos para reproduzir
 
-## Environment
-- Package version:
-- .NET version:
-- OS:
+## Ambiente
+- Versao do pacote:
+- Versao do .NET:
+- Sistema operacional:
 - UF:
 - Ambiente:
 
-## Logs or error details
-
+## Logs ou detalhes do erro
