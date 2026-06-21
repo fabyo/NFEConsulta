@@ -1,4 +1,4 @@
-![Logo](https://raw.githubusercontent.com/fabyo/NFEConsulta/master/logo.png)
+![Logo](https://raw.githubusercontent.com/fabyo/NFEConsulta/master/logo-200.png)
 
 [![NuGet](https://img.shields.io/nuget/v/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
 [![Downloads](https://img.shields.io/nuget/dt/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
