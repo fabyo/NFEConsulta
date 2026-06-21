@@ -3,6 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
 [![Downloads](https://img.shields.io/nuget/dt/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
 [![CI](https://github.com/fabyo/NFEConsulta/actions/workflows/ci.yml/badge.svg)](https://github.com/fabyo/NFEConsulta/actions/workflows/ci.yml)
+[![Scorecard](https://github.com/fabyo/NFEConsulta/actions/workflows/scorecard.yml/badge.svg?branch=main)](https://github.com/fabyo/NFEConsulta/actions/workflows/scorecard.yml)
 [![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 [![License](https://img.shields.io/github/license/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 
