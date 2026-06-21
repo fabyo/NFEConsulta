@@ -76,6 +76,31 @@ ConsultaNFeResult resultado = await client.ConsultarChaveAsync("9999999999999999
 
 A versao publica atual e `0.2.3`.
 
+## 🔗 Projetos relacionados
+
+| Projeto | Descrição |
+|---|---|
+| [NFEDanfe](https://github.com/fabyo/NFEDanfe) | Gera DANFE em PDF a partir de XML NF-e autorizado |
+
+### Ferramentas CLI
+
+- **NFEDanfe.Cli** → Geração de DANFE pela linha de comando.
+
+### Fluxo recomendado
+
+```text
+NF-e XML
+   │
+   ▼
+NFEConsulta
+   │
+   ▼
+NFEDanfe
+   │
+   ▼
+DANFE PDF
+```
+
 ## Autor
 
 Fabyo Guimaraes Oliveira
