@@ -82,25 +82,27 @@ A versao publica atual e `0.2.3`.
 
 | Projeto | Descrição |
 |---|---|
+| [NFeSchemaDownloader](https://github.com/fabyo/NFeSchemaDownloader) | Mantém os Schemas XML (XSD) da SEFAZ sempre atualizados automaticamente |
 | [NFEDanfe](https://github.com/fabyo/NFEDanfe) | Gera DANFE em PDF a partir de XML NF-e autorizado |
 
 ### Ferramentas CLI
 
 - **NFEDanfe.Cli** → Geração de DANFE pela linha de comando.
+- **NFeSchemaDownloader.Cli** → Automação de download de Schemas.
 
 ### Fluxo recomendado
 
 ```text
+NFeSchemaDownloader (Mantém XSDs atualizados)
+   │
+   ▼
 NF-e XML
    │
    ▼
-NFEConsulta
+NFEConsulta (Valida XML via XSD e consulta SEFAZ)
    │
    ▼
-NFEDanfe
-   │
-   ▼
-DANFE PDF
+NFEDanfe (Gera o PDF final)
 ```
 
 ## Autor
