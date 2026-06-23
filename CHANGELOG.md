@@ -1,5 +1,9 @@
 # Historico de alteracoes
 
+## 0.2.4
+- Mapeamento completo de URLs da SEFAZ para todas as UFs pendentes (AM, BA, CE, GO, MA, MT, MS, PA e PE), eliminando a necessidade de override manual de URL.
+- Suporte a consultas nas infraestruturas da SVRS e SVAN atualizado para todos os estados correspondentes.
+
 ## 0.2.3
 - Organizada a documentacao publica com hub, guias e contribuicao.
 - Atualizada a versao publica para refletir as melhorias de documentacao.

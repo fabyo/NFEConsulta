@@ -9,14 +9,19 @@ public static class SefazEndpointResolver
     private const string SvrsStatusProducao = "https://nfe.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx";
     private const string SvrsStatusHomologacao = "https://nfe-homologacao.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx";
 
+    private const string SvanStatusProducao = "https://www.sefazvirtual.fazenda.gov.br/NFeStatusServico4/NFeStatusServico4.asmx";
+    private const string SvanStatusHomologacao = "https://hom.sefazvirtual.fazenda.gov.br/NFeStatusServico4/NFeStatusServico4.asmx";
+
     private static readonly IReadOnlyDictionary<UfNFe, SefazEndpointInfo> ConsultaProtocoloEndpoints =
         new Dictionary<UfNFe, SefazEndpointInfo>
         {
             [UfNFe.AC] = SefazEndpointInfo.Svrs(UfNFe.AC),
             [UfNFe.AL] = SefazEndpointInfo.Svrs(UfNFe.AL),
             [UfNFe.AP] = SefazEndpointInfo.Svrs(UfNFe.AP),
+            [UfNFe.CE] = SefazEndpointInfo.Svrs(UfNFe.CE),
             [UfNFe.DF] = SefazEndpointInfo.Svrs(UfNFe.DF),
             [UfNFe.ES] = SefazEndpointInfo.Svrs(UfNFe.ES),
+            [UfNFe.PA] = SefazEndpointInfo.Svrs(UfNFe.PA),
             [UfNFe.PB] = SefazEndpointInfo.Svrs(UfNFe.PB),
             [UfNFe.PI] = SefazEndpointInfo.Svrs(UfNFe.PI),
             [UfNFe.RJ] = SefazEndpointInfo.Svrs(UfNFe.RJ),
@@ -27,6 +32,8 @@ public static class SefazEndpointResolver
             [UfNFe.SC] = SefazEndpointInfo.Svrs(UfNFe.SC),
             [UfNFe.SE] = SefazEndpointInfo.Svrs(UfNFe.SE),
             [UfNFe.TO] = SefazEndpointInfo.Svrs(UfNFe.TO),
+
+            [UfNFe.MA] = SefazEndpointInfo.Svan(UfNFe.MA),
 
             [UfNFe.SP] = new(
                 UfNFe.SP,
@@ -47,23 +54,51 @@ public static class SefazEndpointResolver
                 "https://nfe.fazenda.pr.gov.br/nfe/NFeConsultaProtocolo4",
                 "https://homologacao.nfe.fazenda.pr.gov.br/nfe/NFeConsultaProtocolo4"),
 
-            [UfNFe.AM] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.AM),
-            [UfNFe.BA] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.BA),
-            [UfNFe.CE] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.CE),
-            [UfNFe.GO] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.GO),
-            [UfNFe.MA] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.MA),
-            [UfNFe.MT] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.MT),
-            [UfNFe.MS] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.MS),
-            [UfNFe.PA] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.PA),
-            [UfNFe.PE] = SefazEndpointInfo.SemEndpointConfirmado(UfNFe.PE)
+            [UfNFe.AM] = new(
+                UfNFe.AM,
+                "SEFAZ-AM",
+                "https://nfe.sefaz.am.gov.br/services2/services/NfeConsulta4",
+                "https://homnfe.sefaz.am.gov.br/services2/services/NfeConsulta4"),
+
+            [UfNFe.BA] = new(
+                UfNFe.BA,
+                "SEFAZ-BA",
+                "https://nfe.sefaz.ba.gov.br/webservices/NFeConsultaProtocolo4/NFeConsultaProtocolo4.asmx",
+                "https://hnfe.sefaz.ba.gov.br/webservices/NFeConsultaProtocolo4/NFeConsultaProtocolo4.asmx"),
+
+            [UfNFe.GO] = new(
+                UfNFe.GO,
+                "SEFAZ-GO",
+                "https://nfe.sefaz.go.gov.br/nfe/services/NFeConsultaProtocolo4",
+                "https://homolog.sefaz.go.gov.br/nfe/services/NFeConsultaProtocolo4"),
+
+            [UfNFe.MT] = new(
+                UfNFe.MT,
+                "SEFAZ-MT",
+                "https://nfe.sefaz.mt.gov.br/nfews/v2/services/NfeConsulta4",
+                "https://homologacao.sefaz.mt.gov.br/nfews/v2/services/NfeConsulta4"),
+
+            [UfNFe.MS] = new(
+                UfNFe.MS,
+                "SEFAZ-MS",
+                "https://nfe.fazenda.ms.gov.br/ws/NFeConsultaProtocolo4",
+                "https://homologacao.nfe.ms.gov.br/ws/NFeConsultaProtocolo4"),
+
+            [UfNFe.PE] = new(
+                UfNFe.PE,
+                "SEFAZ-PE",
+                "https://nfe.sefaz.pe.gov.br/nfe-service/services/NFeConsultaProtocolo4",
+                "https://nfehomolog.sefaz.pe.gov.br/nfe-service/services/NFeConsultaProtocolo4")
         };
 
     private static readonly IReadOnlyDictionary<UfNFe, SefazEndpointInfo> StatusServicoEndpoints =
         ConsultaProtocoloEndpoints.ToDictionary(
             static pair => pair.Key,
-            static pair => pair.Value.Autorizador == "SVRS"
-                ? new SefazEndpointInfo(pair.Key, "SVRS", SvrsStatusProducao, SvrsStatusHomologacao)
-                : pair.Key switch
+            static pair => pair.Value.Autorizador switch
+            {
+                "SVRS" => new SefazEndpointInfo(pair.Key, "SVRS", SvrsStatusProducao, SvrsStatusHomologacao),
+                "SVAN" => new SefazEndpointInfo(pair.Key, "SVAN", SvanStatusProducao, SvanStatusHomologacao),
+                _ => pair.Key switch
                 {
                     UfNFe.SP => new SefazEndpointInfo(
                         UfNFe.SP,
@@ -84,8 +119,45 @@ public static class SefazEndpointResolver
                         "https://nfe.fazenda.pr.gov.br/nfe/NFeStatusServico4",
                         "https://homologacao.nfe.fazenda.pr.gov.br/nfe/NFeStatusServico4"),
 
+                    UfNFe.AM => new SefazEndpointInfo(
+                        UfNFe.AM,
+                        "SEFAZ-AM",
+                        "https://nfe.sefaz.am.gov.br/services2/services/NfeStatusServico4",
+                        "https://homnfe.sefaz.am.gov.br/services2/services/NfeStatusServico4"),
+
+                    UfNFe.BA => new SefazEndpointInfo(
+                        UfNFe.BA,
+                        "SEFAZ-BA",
+                        "https://nfe.sefaz.ba.gov.br/webservices/NFeStatusServico4/NFeStatusServico4.asmx",
+                        "https://hnfe.sefaz.ba.gov.br/webservices/NFeStatusServico4/NFeStatusServico4.asmx"),
+
+                    UfNFe.GO => new SefazEndpointInfo(
+                        UfNFe.GO,
+                        "SEFAZ-GO",
+                        "https://nfe.sefaz.go.gov.br/nfe/services/NFeStatusServico4",
+                        "https://homolog.sefaz.go.gov.br/nfe/services/NFeStatusServico4"),
+
+                    UfNFe.MT => new SefazEndpointInfo(
+                        UfNFe.MT,
+                        "SEFAZ-MT",
+                        "https://nfe.sefaz.mt.gov.br/nfews/v2/services/NfeStatusServico4",
+                        "https://homologacao.sefaz.mt.gov.br/nfews/v2/services/NfeStatusServico4"),
+
+                    UfNFe.MS => new SefazEndpointInfo(
+                        UfNFe.MS,
+                        "SEFAZ-MS",
+                        "https://nfe.fazenda.ms.gov.br/ws/NFeStatusServico4",
+                        "https://homologacao.nfe.ms.gov.br/ws/NFeStatusServico4"),
+
+                    UfNFe.PE => new SefazEndpointInfo(
+                        UfNFe.PE,
+                        "SEFAZ-PE",
+                        "https://nfe.sefaz.pe.gov.br/nfe-service/services/NFeStatusServico4",
+                        "https://nfehomolog.sefaz.pe.gov.br/nfe-service/services/NFeStatusServico4"),
+
                     _ => SefazEndpointInfo.SemEndpointConfirmado(pair.Key)
-                });
+                }
+            });
 
     public static IReadOnlyCollection<SefazEndpointInfo> ListarEndpointsConsultaProtocolo() =>
         ConsultaProtocoloEndpoints.Values
@@ -171,6 +243,12 @@ public sealed record SefazEndpointInfo(
         "SVRS",
         "https://nfe.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx",
         "https://nfe-homologacao.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx");
+
+    public static SefazEndpointInfo Svan(UfNFe uf) => new(
+        uf,
+        "SVAN",
+        "https://www.sefazvirtual.fazenda.gov.br/NFeConsultaProtocolo4/NFeConsultaProtocolo4.asmx",
+        "https://hom.sefazvirtual.fazenda.gov.br/NFeConsultaProtocolo4/NFeConsultaProtocolo4.asmx");
 
     public static SefazEndpointInfo SemEndpointConfirmado(UfNFe uf) => new(
             uf,
