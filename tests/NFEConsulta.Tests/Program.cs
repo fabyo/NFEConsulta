@@ -24,11 +24,11 @@ List<(string Name, Func<Task> Run)> tests =
     ("Tabela de endpoints cobre todas as UFs", TestTabelaEndpointsCobreTodasUfs),
     ("Tabela de status cobre todas as UFs", TestTabelaStatusCobreTodasUfs),
     ("Endpoint SP marcado como validado localmente", TestEndpointSpValidadoLocalmente),
-    ("UF sem endpoint confirmado exige override", TestUfSemEndpointConfirmado),
-    ("Client retorna erro para UF sem endpoint", TestClientUfSemEndpoint),
-    ("Override permite UF sem endpoint confirmado", TestOverridePermiteUfSemEndpoint),
+    ("UF invalida lanca excecao", TestUfInvalidaExcecao),
+    ("Client retorna erro para UF invalida", TestClientUfInvalida),
+    ("Override permite UF nao mapeada", TestOverridePermiteUfNaoMapeada),
     ("Parser de status reconhece SEFAZ online", TestParserStatusOnline),
-    ("Status client retorna erro para UF sem endpoint", TestStatusClientUfSemEndpoint),
+    ("Status client retorna erro para UF invalida", TestStatusClientUfInvalida),
     ("Status service faz retry em falha transitoria", TestStatusRetryTransitorio),
     ("CorrelationId propaga na consulta", TestCorrelationIdConsulta),
     ("CorrelationId propaga no status", TestCorrelationIdStatus),
@@ -228,28 +228,28 @@ static Task TestEndpointSpValidadoLocalmente()
     return Task.CompletedTask;
 }
 
-static Task TestUfSemEndpointConfirmado()
+static Task TestUfInvalidaExcecao()
 {
     Assert.Throws<NotSupportedException>(() =>
-        SefazEndpointResolver.ResolveConsultaProtocolo(UfNFe.AM, TipoAmbiente.Homologacao));
+        SefazEndpointResolver.ResolveConsultaProtocolo((UfNFe)99, TipoAmbiente.Homologacao));
 
     return Task.CompletedTask;
 }
 
-static async Task TestClientUfSemEndpoint()
+static async Task TestClientUfInvalida()
 {
     using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
     SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
-    using NFeConsultaClient client = new(service, new NFeConsultaOptions { Uf = UfNFe.AM });
+    using NFeConsultaClient client = new(service, new NFeConsultaOptions { Uf = (UfNFe)99 });
 
     ConsultaNFeResult result = await client.ConsultarChaveAsync(TestData.Chave).ConfigureAwait(false);
 
-    Assert.False(result.Sucesso, "UF sem endpoint deveria retornar erro.");
+    Assert.False(result.Sucesso, "UF invalida deveria retornar erro.");
     Assert.Equal(TipoResultadoConsulta.RequisicaoInvalida, result.TipoResultado);
-    Assert.Contains("UrlWebServiceOverride", result.ErroDetalhado);
+    Assert.Contains("nao possui endpoint", result.ErroDetalhado);
 }
 
-static async Task TestOverridePermiteUfSemEndpoint()
+static async Task TestOverridePermiteUfNaoMapeada()
 {
     int calls = 0;
     using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
@@ -266,7 +266,7 @@ static async Task TestOverridePermiteUfSemEndpoint()
         service,
         new NFeConsultaOptions
         {
-            Uf = UfNFe.AM,
+            Uf = (UfNFe)99,
             UrlWebServiceOverride = "https://sefaz.test"
         });
 
@@ -292,17 +292,17 @@ static Task TestParserStatusOnline()
     return Task.CompletedTask;
 }
 
-static async Task TestStatusClientUfSemEndpoint()
+static async Task TestStatusClientUfInvalida()
 {
     using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
     SefazStatusService service = new(httpClient, NullLogger<SefazStatusService>.Instance);
-    using NFeStatusClient client = new(service, new NFeConsultaOptions { Uf = UfNFe.AM });
+    using NFeStatusClient client = new(service, new NFeConsultaOptions { Uf = (UfNFe)99 });
 
     SefazStatusResult result = await client.ConsultarStatusAsync().ConfigureAwait(false);
 
-    Assert.False(result.Online, "UF sem endpoint deveria retornar offline.");
+    Assert.False(result.Online, "UF invalida deveria retornar offline.");
     Assert.Equal(TipoResultadoConsulta.RequisicaoInvalida, result.TipoResultado);
-    Assert.Contains("UrlStatusWebServiceOverride", result.ErroDetalhado);
+    Assert.Contains("nao possui endpoint", result.ErroDetalhado);
 }
 
 static async Task TestStatusRetryTransitorio()
