@@ -1,5 +1,9 @@
 # Historico de alteracoes
 
+## 0.3.0
+- Adicionada extracao de metadados de certificados digitais (Nome, CNPJ, Emissor, Datas e Thumbprint) via metodo de extensao `ExtrairInfo()`.
+- Novo comando `certificado` na CLI para impressao de metadados de certificados de forma amigavel ou estruturada em JSON (usando `--json`).
+
 ## 0.2.5
 - Correcao de testes unitarios para refletir o mapeamento completo das UFs.
 - Publicacao da versao para sincronizar master e release.

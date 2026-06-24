@@ -28,6 +28,14 @@ Console.CancelKeyPress += (_, e) =>
 try
 {
     using X509Certificate2 certificado = ResolveCertificate(options);
+    
+    if (options.Command == CliCommand.Certificado)
+    {
+        CertificadoInfo info = certificado.ExtrairInfo();
+        PrintCertificado(info, options.Json);
+        return 0;
+    }
+
     NFeConsultaOptions consultaOptions = options.ToConsultaOptions();
 
     if (options.Command == CliCommand.Status)
@@ -176,10 +184,29 @@ static void PrintStatus(SefazStatusResult result)
         Console.WriteLine($"Erro: {result.ErroDetalhado}");
 }
 
+static void PrintCertificado(CertificadoInfo info, bool json)
+{
+    if (json)
+    {
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(info, jsonOptions));
+    }
+    else
+    {
+        Console.WriteLine($"Nome: {info.Nome}");
+        Console.WriteLine($"CNPJ: {info.Cnpj ?? "Nao encontrado"}");
+        Console.WriteLine($"Emissor: {info.Emissor}");
+        Console.WriteLine($"Emissao: {info.DataEmissao:O}");
+        Console.WriteLine($"Expiracao: {info.DataExpiracao:O}");
+        Console.WriteLine($"Thumbprint: {info.Thumbprint}");
+    }
+}
+
 internal enum CliCommand
 {
     Consultar,
-    Status
+    Status,
+    Certificado
 }
 
 internal sealed record CliOptions
@@ -203,6 +230,7 @@ internal sealed record CliOptions
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(60);
     public int RetryCount { get; init; } = 2;
     public bool Verbose { get; init; }
+    public bool Json { get; init; }
     public bool ShowHelp { get; init; }
     public bool IgnoreServerCertificateErrors { get; init; }
 
@@ -227,6 +255,8 @@ internal sealed record CliOptions
             options = arg switch
             {
                 "status" => options with { Command = CliCommand.Status },
+                "certificado" => options with { Command = CliCommand.Certificado },
+                "--json" => options with { Json = true },
                 "--help" or "-h" => options with { ShowHelp = true },
                 "--verbose" or "-v" => options with { Verbose = true },
                 "--xml-stdin" => options with { ReadXmlFromStdIn = true },
@@ -261,6 +291,7 @@ internal sealed record CliOptions
         Console.WriteLine("  nfeconsulta --xml-file nota.xml --cert-thumbprint <thumbprint>");
         Console.WriteLine("  type nota.xml | nfeconsulta --xml-stdin --cert-thumbprint <thumbprint>");
         Console.WriteLine("  nfeconsulta status --uf SP --cert-thumbprint <thumbprint>");
+        Console.WriteLine("  nfeconsulta certificado --cert-thumbprint <thumbprint>");
         Console.WriteLine();
         Console.WriteLine("Parametros:");
         Console.WriteLine("  --chave <valor>             Chave de acesso NF-e com 44 digitos.");
@@ -281,6 +312,7 @@ internal sealed record CliOptions
         Console.WriteLine("  --timeout-seconds <n>       Padrao: 60.");
         Console.WriteLine("  --retry-count <n>           Retries curtos para falhas transitorias. Padrao: 2.");
         Console.WriteLine("  --verbose                   Logs detalhados.");
+        Console.WriteLine("  --json                      Retorna a saida em formato JSON.");
         Console.WriteLine("  --ignore-server-certificate-errors  Ignora erros TLS do servidor. Evite em producao.");
     }
 

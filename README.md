@@ -59,6 +59,24 @@ using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(certifica
 ConsultaNFeResult resultado = await client.ConsultarChaveAsync("99999999999999999999999999999999999999999999");
 ```
 
+## Extraindo dados do Certificado
+
+### Biblioteca C#
+```csharp
+using NFEConsulta.Infrastructure;
+
+CertificadoInfo info = certificado.ExtrairInfo();
+Console.WriteLine($"CNPJ: {info.Cnpj}");
+Console.WriteLine($"Vencimento: {info.DataExpiracao}");
+```
+
+### CLI
+```bash
+nfeconsulta certificado --cert-pem cert.pem --key-pem key.pem
+# Ou com saida em JSON:
+nfeconsulta certificado --cert-pem cert.pem --key-pem key.pem --json
+```
+
 ## O que esta incluso
 
 - Validacao de chave de acesso de 44 digitos.
@@ -66,6 +84,7 @@ ConsultaNFeResult resultado = await client.ConsultarChaveAsync("9999999999999999
 - Validacao XML contra XSD oficial.
 - Consulta de NF-e por chave.
 - Consulta do status oficial da SEFAZ.
+- Extração de dados e metadados de certificados digitais (CNPJ, nome, datas).
 - Suporte para biblioteca, CLI e API interna.
 
 ## Projetos
@@ -76,7 +95,7 @@ ConsultaNFeResult resultado = await client.ConsultarChaveAsync("9999999999999999
 
 ## Pacote e versao
 
-A versao publica atual e `0.2.3`.
+A versao publica atual e `0.3.0`.
 
 ## 🔗 Projetos relacionados
 
