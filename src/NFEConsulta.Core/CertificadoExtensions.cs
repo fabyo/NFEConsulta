@@ -17,7 +17,7 @@ public static class CertificadoExtensions
             throw new ArgumentNullException(nameof(certificado));
 
         string subject = certificado.Subject;
-        
+
         string nome = ExtractSubjectField(subject, "CN=");
         string? cnpj = null;
 
@@ -48,7 +48,7 @@ public static class CertificadoExtensions
             if (field.StartsWith(fieldPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 var value = field.Substring(fieldPrefix.Length);
-                
+
                 // Se o valor contiver o CNPJ no formato NOME:CNPJ, vamos retornar apenas o nome
                 var colonIndex = value.LastIndexOf(':');
                 if (colonIndex > 0 && colonIndex + 15 == value.Length)
@@ -59,7 +59,7 @@ public static class CertificadoExtensions
                         return value.Substring(0, colonIndex);
                     }
                 }
-                
+
                 return value;
             }
         }

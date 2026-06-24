@@ -28,7 +28,7 @@ Console.CancelKeyPress += (_, e) =>
 try
 {
     using X509Certificate2 certificado = ResolveCertificate(options);
-    
+
     if (options.Command == CliCommand.Certificado)
     {
         CertificadoInfo info = certificado.ExtrairInfo();
