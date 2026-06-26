@@ -491,7 +491,7 @@ static Task TestParserCadastro()
     Assert.True(result.Sucesso, result.ErroDetalhado ?? "Cadastro deveria ser sucesso.");
     Assert.Equal("111", result.CodigoStatus);
     Assert.Equal(1, result.Contribuintes.Count);
-    
+
     var cad = result.Contribuintes[0];
     Assert.Equal("110042490114", cad.IE);
     Assert.Equal("12345678901234", cad.CNPJ);
