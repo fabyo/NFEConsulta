@@ -34,17 +34,15 @@ jobs:
         run: dotnet pack NFEConsulta.sln -c Release --no-build -o ./artifacts
 
       - name: Generate SBOM (CycloneDX)
-        uses: CycloneDX/gh-dotnet-generate-sbom@v2
-        with:
-          path: ./NFEConsulta.sln
-          json: true
-          github-bearer-token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet tool install --global CycloneDX
+          dotnet-CycloneDX NFEConsulta.sln -o ./artifacts --json
 
       - name: Upload SBOM as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom
-          path: ./*.json
+          path: ./artifacts/bom.json
 
       - name: NuGet Login
         uses: NuGet/login@v1

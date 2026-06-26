@@ -127,7 +127,7 @@ if (resultado.Sucesso)
 
 ## Pacote e versao
 
-A versao publica atual e `0.4.1`.
+A versao publica atual e `0.4.2`.
 
 ## 🔗 Projetos relacionados
 
