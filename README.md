@@ -4,7 +4,9 @@
 [![Downloads](https://img.shields.io/nuget/dt/NFEConsulta.svg)](https://www.nuget.org/packages/NFEConsulta)
 [![Build](https://github.com/fabyo/NFEConsulta/actions/workflows/ci.yml/badge.svg)](https://github.com/fabyo/NFEConsulta/actions/workflows/ci.yml)
 [![Publish](https://github.com/fabyo/NFEConsulta/actions/workflows/publish.yml/badge.svg)](https://github.com/fabyo/NFEConsulta/actions/workflows/publish.yml)
+[![CodeQL](https://github.com/fabyo/NFEConsulta/actions/workflows/codeql.yml/badge.svg)](https://github.com/fabyo/NFEConsulta/actions/workflows/codeql.yml)
 [![Scorecard](https://github.com/fabyo/NFEConsulta/actions/workflows/scorecard.yml/badge.svg?branch=master)](https://github.com/fabyo/NFEConsulta/actions/workflows/scorecard.yml)
+[![Release Drafter](https://github.com/fabyo/NFEConsulta/actions/workflows/release-drafter.yml/badge.svg)](https://github.com/fabyo/NFEConsulta/actions/workflows/release-drafter.yml)
 [![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 [![License](https://img.shields.io/github/license/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 
@@ -125,7 +127,7 @@ if (resultado.Sucesso)
 
 ## Pacote e versao
 
-A versao publica atual e `0.3.0`.
+A versao publica atual e `0.4.0`.
 
 ## 🔗 Projetos relacionados
 
