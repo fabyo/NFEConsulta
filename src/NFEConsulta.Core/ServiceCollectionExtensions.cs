@@ -64,4 +64,33 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    public static IServiceCollection AddSefazCadastroService(
+        this IServiceCollection services,
+        X509Certificate2 certificado,
+        TimeSpan? timeout = null,
+        bool ignoreServerCertificateErrors = false)
+    {
+        services
+            .AddHttpClient<SefazCadastroService>(client =>
+            {
+                client.Timeout = timeout ?? TimeSpan.FromSeconds(30);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() =>
+            {
+                HttpClientHandler handler = new()
+                {
+                    SslProtocols = SslProtocols.Tls12
+                };
+
+                if (ignoreServerCertificateErrors)
+                    handler.ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+                handler.ClientCertificates.Add(certificado);
+                return handler;
+            });
+
+        return services;
+    }
 }

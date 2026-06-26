@@ -159,6 +159,78 @@ public static class SefazEndpointResolver
                 }
             });
 
+    private static readonly IReadOnlyDictionary<UfNFe, SefazEndpointInfo> CadastroEndpoints =
+        ConsultaProtocoloEndpoints.ToDictionary(
+            static pair => pair.Key,
+            static pair => pair.Value.Autorizador switch
+            {
+                "SVRS" => new SefazEndpointInfo(pair.Key, "SVRS",
+                    "https://cad.svrs.rs.gov.br/ws/cadconsultacadastro/cadconsultacadastro4.asmx",
+                    "https://cad-homologacao.svrs.rs.gov.br/ws/cadconsultacadastro/cadconsultacadastro4.asmx"),
+                "SVAN" => new SefazEndpointInfo(pair.Key, "SVRS",
+                    "https://cad.svrs.rs.gov.br/ws/cadconsultacadastro/cadconsultacadastro4.asmx",
+                    "https://cad-homologacao.svrs.rs.gov.br/ws/cadconsultacadastro/cadconsultacadastro4.asmx"),
+                _ => pair.Key switch
+                {
+                    UfNFe.SP => new SefazEndpointInfo(
+                        UfNFe.SP,
+                        "SEFAZ-SP",
+                        "https://nfe.fazenda.sp.gov.br/ws/cadconsultacadastro4.asmx",
+                        "https://homologacao.nfe.fazenda.sp.gov.br/ws/cadconsultacadastro4.asmx",
+                        ValidacaoEndpoint.ValidadoLocalmente),
+
+                    UfNFe.MG => new SefazEndpointInfo(
+                        UfNFe.MG,
+                        "SEFAZ-MG",
+                        "https://nfe.fazenda.mg.gov.br/nfe2/services/CadConsultaCadastro4",
+                        "https://hnfe.fazenda.mg.gov.br/nfe2/services/CadConsultaCadastro4"),
+
+                    UfNFe.PR => new SefazEndpointInfo(
+                        UfNFe.PR,
+                        "SEFAZ-PR",
+                        "https://nfe.sefa.pr.gov.br/nfe/CadConsultaCadastro4",
+                        "https://homologacao.nfe.sefa.pr.gov.br/nfe/CadConsultaCadastro4"),
+
+                    UfNFe.AM => new SefazEndpointInfo(
+                        UfNFe.AM,
+                        "SEFAZ-AM",
+                        "https://nfe.sefaz.am.gov.br/services2/services/CadConsultaCadastro4",
+                        "https://homnfe.sefaz.am.gov.br/services2/services/CadConsultaCadastro4"),
+
+                    UfNFe.BA => new SefazEndpointInfo(
+                        UfNFe.BA,
+                        "SEFAZ-BA",
+                        "https://nfe.sefaz.ba.gov.br/webservices/CadConsultaCadastro4/CadConsultaCadastro4.asmx",
+                        "https://hnfe.sefaz.ba.gov.br/webservices/CadConsultaCadastro4/CadConsultaCadastro4.asmx"),
+
+                    UfNFe.GO => new SefazEndpointInfo(
+                        UfNFe.GO,
+                        "SEFAZ-GO",
+                        "https://nfe.sefaz.go.gov.br/nfe/services/CadConsultaCadastro4",
+                        "https://homolog.sefaz.go.gov.br/nfe/services/CadConsultaCadastro4"),
+
+                    UfNFe.MT => new SefazEndpointInfo(
+                        UfNFe.MT,
+                        "SEFAZ-MT",
+                        "https://nfe.sefaz.mt.gov.br/nfews/v2/services/CadConsultaCadastro4",
+                        "https://homologacao.sefaz.mt.gov.br/nfews/v2/services/CadConsultaCadastro4"),
+
+                    UfNFe.MS => new SefazEndpointInfo(
+                        UfNFe.MS,
+                        "SEFAZ-MS",
+                        "https://nfe.sefaz.ms.gov.br/ws/CadConsultaCadastro4",
+                        "https://homologacao.nfe.ms.gov.br/ws/CadConsultaCadastro4"),
+
+                    UfNFe.PE => new SefazEndpointInfo(
+                        UfNFe.PE,
+                        "SEFAZ-PE",
+                        "https://nfe.sefaz.pe.gov.br/nfe-service/services/CadConsultaCadastro4",
+                        "https://nfehomolog.sefaz.pe.gov.br/nfe-service/services/CadConsultaCadastro4"),
+
+                    _ => SefazEndpointInfo.SemEndpointConfirmado(pair.Key)
+                }
+            });
+
     public static IReadOnlyCollection<SefazEndpointInfo> ListarEndpointsConsultaProtocolo() =>
         ConsultaProtocoloEndpoints.Values
             .OrderBy(static endpoint => endpoint.Uf)
@@ -166,6 +238,11 @@ public static class SefazEndpointResolver
 
     public static IReadOnlyCollection<SefazEndpointInfo> ListarEndpointsStatusServico() =>
         StatusServicoEndpoints.Values
+            .OrderBy(static endpoint => endpoint.Uf)
+            .ToArray();
+
+    public static IReadOnlyCollection<SefazEndpointInfo> ListarEndpointsCadastro() =>
+        CadastroEndpoints.Values
             .OrderBy(static endpoint => endpoint.Uf)
             .ToArray();
 
@@ -196,6 +273,23 @@ public static class SefazEndpointResolver
             throw new NotSupportedException(
                 $"UF {uf} ainda nao possui endpoint de status NF-e confirmado na biblioteca. " +
                 "Informe NFeConsultaOptions.UrlStatusWebServiceOverride para usar essa UF.");
+        }
+
+        return ambiente == TipoAmbiente.Producao
+            ? endpoint.UrlProducao!
+            : endpoint.UrlHomologacao!;
+    }
+
+    public static string ResolveCadastro(UfNFe uf, TipoAmbiente ambiente)
+    {
+        if (!CadastroEndpoints.TryGetValue(uf, out SefazEndpointInfo? endpoint))
+            throw new NotSupportedException($"UF {uf} nao possui endpoint de consulta cadastro mapeado.");
+
+        if (!endpoint.EstaMapeado)
+        {
+            throw new NotSupportedException(
+                $"UF {uf} ainda nao possui endpoint de consulta cadastro confirmado na biblioteca. " +
+                "Informe NFeConsultaOptions.UrlWebServiceOverride para usar essa UF.");
         }
 
         return ambiente == TipoAmbiente.Producao

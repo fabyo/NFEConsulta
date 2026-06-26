@@ -77,6 +77,35 @@ nfeconsulta certificado --cert-pem cert.pem --key-pem key.pem
 nfeconsulta certificado --cert-pem cert.pem --key-pem key.pem --json
 ```
 
+## Consultando CNPJ / Cadastro de Contribuinte na SEFAZ
+
+Você pode consultar a situação fiscal e cadastral de um CNPJ, CPF ou Inscrição Estadual (IE) diretamente junto aos webservices estaduais da SEFAZ usando o método `NFeCadastroClient`.
+
+```csharp
+using NFEConsulta.Models;
+using NFEConsulta.Services;
+
+NFeConsultaOptions options = new()
+{
+    Ambiente = TipoAmbiente.Producao,
+    Uf = UfNFe.SP // Define a UF da consulta
+};
+
+using NFeCadastroClient client = NFeCadastroClient.CriarComCertificado(certificado, options);
+CadastroConsultaResult resultado = await client.ConsultarCadastroAsync("12345678901234"); // CNPJ, CPF ou IE
+
+if (resultado.Sucesso)
+{
+    foreach (var cad in resultado.Contribuintes)
+    {
+        Console.WriteLine($"Nome: {cad.Nome}");
+        Console.WriteLine($"IE: {cad.IE}");
+        Console.WriteLine($"Situação: {cad.Situacao}"); // Ex: "Habilitado"
+        Console.WriteLine($"Endereço: {cad.Endereco?.Logradouro}, {cad.Endereco?.Numero} - {cad.Endereco?.NomeMunicipio}/{cad.UF}");
+    }
+}
+```
+
 ## O que esta incluso
 
 - Validacao de chave de acesso de 44 digitos.
@@ -84,6 +113,7 @@ nfeconsulta certificado --cert-pem cert.pem --key-pem key.pem --json
 - Validacao XML contra XSD oficial.
 - Consulta de NF-e por chave.
 - Consulta do status oficial da SEFAZ.
+- Consulta de cadastro de contribuinte (CNPJ, CPF ou IE) via SEFAZ (`CadConsultaCadastro4`).
 - Extração de dados e metadados de certificados digitais (CNPJ, nome, datas).
 - Suporte para biblioteca, CLI e API interna.
 

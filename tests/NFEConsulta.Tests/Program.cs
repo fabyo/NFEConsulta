@@ -34,7 +34,9 @@ List<(string Name, Func<Task> Run)> tests =
     ("CorrelationId propaga no status", TestCorrelationIdStatus),
     ("Client retorna falha XML sem excecao", TestClientXmlInvalido),
     ("Servico faz retry em falha transitoria", TestRetryTransitorio),
-    ("Integracao real opcional por env", TestIntegracaoRealOpcional)
+    ("Integracao real opcional por env", TestIntegracaoRealOpcional),
+    ("Parser de Cadastro reconhece resposta com IE localizada", TestParserCadastro),
+    ("Cadastro client realiza consulta com sucesso", TestCadastroClient)
 ];
 
 int failures = 0;
@@ -482,8 +484,94 @@ static UfNFe? ParseUfOrDefault(string? value) =>
 static int ParseIntOrDefault(string? value, int fallback) =>
     int.TryParse(value, out int parsed) && parsed >= 0 ? parsed : fallback;
 
+static Task TestParserCadastro()
+{
+    CadastroConsultaResult result = SefazCadastroResponseParser.Parse(TestData.RespostaCadastroLocalizado);
+
+    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Cadastro deveria ser sucesso.");
+    Assert.Equal("111", result.CodigoStatus);
+    Assert.Equal(1, result.Contribuintes.Count);
+    
+    var cad = result.Contribuintes[0];
+    Assert.Equal("110042490114", cad.IE);
+    Assert.Equal("12345678901234", cad.CNPJ);
+    Assert.Equal("SP", cad.UF);
+    Assert.Equal("Habilitado", cad.Situacao);
+    Assert.Equal("EMPRESA TESTE LTDA", cad.Nome);
+    Assert.Equal("TESTE ME", cad.NomeFantasia);
+    Assert.Equal("AVENIDA PAULISTA", cad.Endereco?.Logradouro);
+    Assert.Equal("1000", cad.Endereco?.Numero);
+    return Task.CompletedTask;
+}
+
+static async Task TestCadastroClient()
+{
+    using SefazCadastroService service = new(
+        new HttpClient(new StubHttpMessageHandler(req =>
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(TestData.RespostaCadastroLocalizado, Encoding.UTF8, "application/soap+xml")
+            };
+        })),
+        NullLogger<SefazCadastroService>.Instance);
+
+    NFeConsultaOptions options = new()
+    {
+        Ambiente = TipoAmbiente.Homologacao,
+        Uf = UfNFe.SP
+    };
+
+    using NFeCadastroClient client = new(service, options);
+    CadastroConsultaResult result = await client.ConsultarCadastroAsync("12345678901234").ConfigureAwait(false);
+
+    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Deveria conseguir consultar.");
+    Assert.Equal("111", result.CodigoStatus);
+    Assert.Equal(1, result.Contribuintes.Count);
+}
+
 internal static class TestData
 {
+    public const string RespostaCadastroLocalizado = """
+        <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">
+          <soap:Body>
+            <nfeResultMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4">
+              <retConsCad xmlns="http://www.portalfiscal.inf.br/nfe" versao="2.00">
+                <infCons>
+                  <verAplic>SP-MD-26-06</verAplic>
+                  <cStat>111</cStat>
+                  <xMotivo>Consulta cadastro com uma IE localizada</xMotivo>
+                  <UF>SP</UF>
+                  <CNPJ>12345678901234</CNPJ>
+                  <dhCons>2026-06-26T04:00:00-03:00</dhCons>
+                  <cUF>35</cUF>
+                  <infCad>
+                    <IE>110042490114</IE>
+                    <CNPJ>12345678901234</CNPJ>
+                    <UF>SP</UF>
+                    <cSit>1</cSit>
+                    <xNome>EMPRESA TESTE LTDA</xNome>
+                    <xFant>TESTE ME</xFant>
+                    <xRegAp>1</xRegAp>
+                    <CNAE>4711302</CNAE>
+                    <dIniAtiv>2000-01-01</dIniAtiv>
+                    <ender>
+                      <xLgr>AVENIDA PAULISTA</xLgr>
+                      <nro>1000</nro>
+                      <xCpl>SALA 15</xCpl>
+                      <xBairro>BELA VISTA</xBairro>
+                      <cMun>3550308</cMun>
+                      <xMun>SAO PAULO</xMun>
+                      <CEP>01310100</CEP>
+                    </ender>
+                  </infCad>
+                </infCons>
+              </retConsCad>
+            </nfeResultMsg>
+          </soap:Body>
+        </soap:Envelope>
+        """;
+
     public const string Chave = "35260600000000000100550010000000011000000006";
 
     public const string XmlComChNFe = """

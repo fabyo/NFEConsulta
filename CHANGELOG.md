@@ -1,5 +1,10 @@
 # Historico de alteracoes
 
+## 0.4.0
+- Adicionado suporte nativo para consulta de cadastro de contribuintes da SEFAZ via Web Service `CadConsultaCadastro4` (consulta por CNPJ, CPF ou IE).
+- Introduzido `NFeCadastroClient`, `SefazCadastroService` e `SefazCadastroResponseParser`.
+- Mapeamento completo dos endpoints de consulta de cadastro para todas as UFs (via SVRS e servidores próprios).
+
 ## 0.3.0
 - Adicionada extracao de metadados de certificados digitais (Nome, CNPJ, Emissor, Datas e Thumbprint) via metodo de extensao `ExtrairInfo()`.
 - Novo comando `certificado` na CLI para impressao de metadados de certificados de forma amigavel ou estruturada em JSON (usando `--json`).
