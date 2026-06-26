@@ -133,11 +133,13 @@ A versao publica atual e `0.4.2`.
 
 | Projeto | Descrição |
 |---|---|
+| [NFEEmissor](https://github.com/fabyo/NFEEmissor) | Emissor completo de Nota Fiscal Eletrônica (NF-e) |
 | [NFeSchemaDownloader](https://github.com/fabyo/NFeSchemaDownloader) | Mantém os Schemas XML (XSD) da SEFAZ sempre atualizados automaticamente |
 | [NFEDanfe](https://github.com/fabyo/NFEDanfe) | Gera DANFE em PDF a partir de XML NF-e autorizado |
 
 ### Ferramentas CLI
 
+- **NFEEmissor.Cli** (se houver) / ferramentas do ecossistema.
 - **NFEDanfe.Cli** → Geração de DANFE pela linha de comando.
 - **NFeSchemaDownloader.Cli** → Automação de download de Schemas.
 
@@ -145,6 +147,9 @@ A versao publica atual e `0.4.2`.
 
 ```text
 NFeSchemaDownloader (Mantém XSDs atualizados)
+   │
+   ▼
+NFEEmissor (Gera o XML da NF-e)
    │
    ▼
 NF-e XML
