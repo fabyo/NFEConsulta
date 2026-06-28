@@ -18,7 +18,10 @@ public static class NFeXmlValidator
         XDocument document;
         try
         {
-            document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+            var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null };
+            using var stringReader = new System.IO.StringReader(xml);
+            using var reader = System.Xml.XmlReader.Create(stringReader, settings);
+            document = XDocument.Load(reader, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
         }
         catch (Exception ex)
         {

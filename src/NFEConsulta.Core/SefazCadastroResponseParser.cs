@@ -18,7 +18,10 @@ public static class SefazCadastroResponseParser
         XDocument doc;
         try
         {
-            doc = XDocument.Parse(xmlResposta);
+            var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null };
+            using var stringReader = new System.IO.StringReader(xmlResposta);
+            using var reader = System.Xml.XmlReader.Create(stringReader, settings);
+            doc = XDocument.Load(reader);
         }
         catch (Exception ex)
         {

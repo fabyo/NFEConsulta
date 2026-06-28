@@ -47,7 +47,10 @@ public static partial class ChaveAcessoNFe
         XDocument doc;
         try
         {
-            doc = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null };
+            using var stringReader = new System.IO.StringReader(xml);
+            using var reader = System.Xml.XmlReader.Create(stringReader, settings);
+            doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
         }
         catch (Exception ex)
         {
