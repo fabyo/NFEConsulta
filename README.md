@@ -10,7 +10,8 @@
 [![GitHub stars](https://img.shields.io/github/stars/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 [![License](https://img.shields.io/github/license/fabyo/NFEConsulta)](https://github.com/fabyo/NFEConsulta)
 
-`NFEConsulta` é uma biblioteca .NET para consultar NF-e.
+**NFEConsulta** é uma biblioteca .NET moderna para consulta de NF-e e serviços fiscais. Além de verificar a situação da NF-e (autorizada, cancelada e outros eventos), permite consultar dados de CNPJ, obter informações e situação cadastral da empresa, validar certificados digitais A1/A3 e verificar sua data de expiração, oferecendo uma API simples, rápida e pronta para integração em aplicações fiscais.
+
 
 ## Diferenciais
 
