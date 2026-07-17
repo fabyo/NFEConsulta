@@ -2,28 +2,18 @@
 
 ## v1.0.1
 
-### Principais melhorias:
-- Testes migrados para xUnit: 34 aprovados e 1 integração real opcional ignorada.
-- Rate limit por IP: 30 requisições por minuto nos endpoints SEFAZ.
-- Sem autenticação/autorização, conforme solicitado.
-- Limite de 5 MB para XML/requisições e 2 MB para respostas da SEFAZ.
-- XSD protegido contra carregamento remoto ou fora da pasta autorizada.
-- Certificados vencidos, sem chave privada ou inadequados para TLS são rejeitados.
-- Retry para HTTP 408, 429, 500, 502, 503 e 504, respeitando Retry-After.
-- Inferência automática da UF pela chave da NF-e corrigida.
-- Suporte validado em .NET 8 e .NET 10.
-- Pacote reduzido de 282 para somente 6 schemas XSD necessários.
-- Dependências centralizadas e GitHub Actions fixadas por SHA.
-- Documentação e CI atualizados.
-
-### Validação final:
-- Build: zero erros e zero avisos.
-- xUnit: 34 aprovados, 1 ignorado, zero falhas.
-- Cobertura: 58,47% de linhas e 39,20% de branches.
-- Nenhum pacote vulnerável.
-- Nenhuma dependência direta desatualizada.
-- Formatação e git diff --check aprovados.
-- Pacotes NFEConsulta 1.0.1 e NFEConsulta.Cli 1.0.1 gerados.
+- Migração de testes para xUnit com 34 testes aprovados e 1 teste de integração opcional ignorado.
+- Implementação de Rate Limit configurado por IP (limite padrão de 30 requisições por minuto para endpoints da SEFAZ).
+- Remoção e simplificação de mecanismos de autenticação/autorização nos endpoints locais.
+- Definição de limites de tamanho para requisições XML (máximo de 5 MB) e para payloads de resposta da SEFAZ (máximo de 2 MB).
+- Proteção de carregamento de esquemas XSD restringindo o acesso a caminhos locais autorizados e bloqueando carregamentos externos.
+- Implementação de validação rigorosa de certificados digitais, rejeitando certificados expirados, sem chaves privadas associadas ou inadequados para comunicações TLS.
+- Mecanismo de retransmissão (Retry) para códigos HTTP transitórios (408, 429, 500, 502, 503, 504) respeitando a diretiva 'Retry-After'.
+- Correção na lógica de inferência automática da Unidade Federativa (UF) baseada na chave de acesso da NF-e.
+- Homologação e validação de compatibilidade do SDK nos runtimes .NET 8 e .NET 10.
+- Otimização do pacote com redução do conjunto de esquemas XSD distribuídos de 282 para apenas os 6 estritamente necessários.
+- Centralização de dependências de projetos e fixação de versões de GitHub Actions por hashes SHA estáveis.
+- Atualização geral da documentação do projeto e dos fluxos de Integração Contínua (CI).
 
 ## Unreleased
 
