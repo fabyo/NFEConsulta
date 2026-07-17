@@ -189,7 +189,11 @@ public enum UfNFe
 public sealed record NFeConsultaOptions
 {
     public TipoAmbiente Ambiente { get; init; } = TipoAmbiente.Homologacao;
-    public UfNFe? Uf { get; init; } = UfNFe.SP;
+    /// <summary>
+    /// UF usada para resolver o endpoint. Quando nula, consultas por chave inferem
+    /// a UF pelos dois primeiros dígitos da chave; status e cadastro usam SP.
+    /// </summary>
+    public UfNFe? Uf { get; init; }
     public string? UrlWebServiceOverride { get; init; }
     public string? UrlStatusWebServiceOverride { get; init; }
     public string? CorrelationId { get; init; }

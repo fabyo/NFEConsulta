@@ -22,14 +22,14 @@ SefazStatusResult status = await statusClient.ConsultarStatusAsync();
 NFeConsultaOptions options = new()
 {
     Ambiente = TipoAmbiente.Producao,
-    Uf = UfNFe.SP,
     CorrelationId = "job-20260619-001",
     Timeout = TimeSpan.FromSeconds(30),
     RetryCount = 2
 };
 ```
 
-Para outro estado, altere a UF:
+Sem `Uf`, a consulta infere o estado pelos dois primeiros digitos da chave.
+Para forcar outro endpoint ou para operacoes sem chave, informe a UF:
 
 ```csharp
 NFeConsultaOptions options = new()

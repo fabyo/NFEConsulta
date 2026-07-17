@@ -126,8 +126,9 @@ static async Task<string> ResolveChaveAsync(CliOptions options, CancellationToke
 
     if (options.ReadXmlFromStdIn)
     {
-        using MemoryStream buffer = new();
-        await Console.OpenStandardInput().CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        using MemoryStream buffer = await XmlInputLimits
+            .CopyToMemoryAsync(Console.OpenStandardInput(), cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(options.XsdDirectory))
         {
@@ -223,7 +224,7 @@ internal sealed record CliOptions
     public string? KeyPemPath { get; init; }
     public string? XsdDirectory { get; init; }
     public TipoAmbiente Ambiente { get; init; } = TipoAmbiente.Homologacao;
-    public UfNFe? Uf { get; init; } = UfNFe.SP;
+    public UfNFe? Uf { get; init; }
     public string? UrlWebService { get; init; }
     public string? UrlStatusWebService { get; init; }
     public string? CorrelationId { get; init; }

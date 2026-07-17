@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: |
             8.0.x
@@ -30,22 +30,27 @@ jobs:
       - name: Build
         run: dotnet build NFEConsulta.sln -c Release --no-restore
 
+      - name: Tests
+        run: dotnet test NFEConsulta.sln -c Release --no-build
+
       - name: Pack
-        run: dotnet pack NFEConsulta.sln -c Release --no-build -o ./artifacts
+        run: |
+          dotnet pack src/NFEConsulta.Core/NFEConsulta.Core.csproj -c Release --no-build -o ./artifacts
+          dotnet pack src/NFEConsulta.Cli/NFEConsulta.Cli.csproj -c Release --no-build -o ./artifacts
 
       - name: Generate SBOM (CycloneDX)
         run: |
-          dotnet tool install --global CycloneDX
+          dotnet tool install --global CycloneDX --version 6.2.0
           dotnet-CycloneDX NFEConsulta.sln -o ./artifacts --json
 
       - name: Upload SBOM as Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sbom
           path: ./artifacts/bom.json
 
       - name: NuGet Login
-        uses: NuGet/login@v1
+        uses: NuGet/login@ebc737b6fc418a6ca0073cf116ec8dc156d8b81e # v1
         id: login
         with:
           user: fabyoguima

@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using NFEConsulta.Extensions;
 using NFEConsulta.Infrastructure;
 using NFEConsulta.Models;
@@ -9,7 +12,40 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 SefazApiOptions options = SefazApiOptions.FromConfiguration(builder.Configuration);
 using X509Certificate2 certificado = ResolveCertificate(options);
 
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = options.MaxRequestBodyBytes;
+});
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddRateLimiter(rateLimiterOptions =>
+{
+    rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    rateLimiterOptions.AddPolicy("sefaz-per-ip", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = options.RateLimitPermitLimit,
+                Window = options.RateLimitWindow,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    rateLimiterOptions.OnRejected = async (context, cancellationToken) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                Math.Ceiling(retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+        }
+
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response
+            .WriteAsJsonAsync(
+                new ErrorResponse("Limite de consultas excedido para este IP."),
+                cancellationToken)
+            .ConfigureAwait(false);
+    };
+});
 builder.Services.AddSefazNFeService(
     certificado,
     options.Timeout,
@@ -32,6 +68,8 @@ builder.Services.AddTransient<NFeStatusClient>(serviceProvider =>
 
 WebApplication app = builder.Build();
 
+app.UseRateLimiter();
+
 app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")));
 
 app.MapGet("/sefaz/status", async (
@@ -44,7 +82,7 @@ app.MapGet("/sefaz/status", async (
         .ConfigureAwait(false);
 
     return ToHttpStatusResult(result);
-});
+}).RequireRateLimiting("sefaz-per-ip");
 
 app.MapPost("/consultar", async (
     ConsultaNFeApiRequest request,
@@ -90,7 +128,7 @@ app.MapPost("/consultar", async (
     {
         return Results.Problem(ex.Message, statusCode: StatusCodes.Status504GatewayTimeout);
     }
-});
+}).RequireRateLimiting("sefaz-per-ip");
 
 app.Run();
 
@@ -156,12 +194,15 @@ internal sealed record SefazApiOptions
     public string? KeyPemPath { get; init; }
     public string? XsdDirectory { get; init; }
     public TipoAmbiente Ambiente { get; init; } = TipoAmbiente.Homologacao;
-    public UfNFe? Uf { get; init; } = UfNFe.SP;
+    public UfNFe? Uf { get; init; }
     public string? UrlWebService { get; init; }
     public string? UrlStatusWebService { get; init; }
     public string? CorrelationId { get; init; }
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(60);
     public int RetryCount { get; init; } = 2;
+    public int RateLimitPermitLimit { get; init; } = 30;
+    public TimeSpan RateLimitWindow { get; init; } = TimeSpan.FromMinutes(1);
+    public long MaxRequestBodyBytes { get; init; } = XmlInputLimits.DefaultMaxXmlBytes;
     public bool IgnoreServerCertificateErrors { get; init; }
 
     public NFeConsultaOptions ToConsultaOptions() => new()
@@ -182,6 +223,9 @@ internal sealed record SefazApiOptions
         string? uf = section["UF"];
         int timeoutSeconds = section.GetValue("TimeoutSeconds", 60);
         int retryCount = section.GetValue("RetryCount", 2);
+        int rateLimitPermitLimit = section.GetValue("RateLimitPermitLimit", 30);
+        int rateLimitWindowSeconds = section.GetValue("RateLimitWindowSeconds", 60);
+        long maxRequestBodyBytes = section.GetValue("MaxRequestBodyBytes", XmlInputLimits.DefaultMaxXmlBytes);
 
         return new SefazApiOptions
         {
@@ -193,12 +237,17 @@ internal sealed record SefazApiOptions
             KeyPemPath = section["KeyPemPath"],
             XsdDirectory = section["XsdDirectory"],
             Ambiente = ParseAmbiente(ambiente),
-            Uf = string.IsNullOrWhiteSpace(uf) ? UfNFe.SP : SefazEndpointResolver.ParseUf(uf),
+            Uf = string.IsNullOrWhiteSpace(uf) ? null : SefazEndpointResolver.ParseUf(uf),
             UrlWebService = section["UrlWebService"],
             UrlStatusWebService = section["UrlStatusWebService"],
             CorrelationId = section["CorrelationId"],
             Timeout = TimeSpan.FromSeconds(timeoutSeconds > 0 ? timeoutSeconds : 60),
             RetryCount = retryCount >= 0 ? retryCount : 2,
+            RateLimitPermitLimit = rateLimitPermitLimit > 0 ? rateLimitPermitLimit : 30,
+            RateLimitWindow = TimeSpan.FromSeconds(rateLimitWindowSeconds > 0 ? rateLimitWindowSeconds : 60),
+            MaxRequestBodyBytes = maxRequestBodyBytes > 0
+                ? maxRequestBodyBytes
+                : XmlInputLimits.DefaultMaxXmlBytes,
             IgnoreServerCertificateErrors = section.GetValue("IgnoreServerCertificateErrors", false)
         };
     }

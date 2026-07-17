@@ -1,5 +1,33 @@
 # Historico de alteracoes
 
+## v1.0.1
+
+### Principais melhorias:
+- Testes migrados para xUnit: 34 aprovados e 1 integração real opcional ignorada.
+- Rate limit por IP: 30 requisições por minuto nos endpoints SEFAZ.
+- Sem autenticação/autorização, conforme solicitado.
+- Limite de 5 MB para XML/requisições e 2 MB para respostas da SEFAZ.
+- XSD protegido contra carregamento remoto ou fora da pasta autorizada.
+- Certificados vencidos, sem chave privada ou inadequados para TLS são rejeitados.
+- Retry para HTTP 408, 429, 500, 502, 503 e 504, respeitando Retry-After.
+- Inferência automática da UF pela chave da NF-e corrigida.
+- Suporte validado em .NET 8 e .NET 10.
+- Pacote reduzido de 282 para somente 6 schemas XSD necessários.
+- Dependências centralizadas e GitHub Actions fixadas por SHA.
+- Documentação e CI atualizados.
+
+### Validação final:
+- Build: zero erros e zero avisos.
+- xUnit: 34 aprovados, 1 ignorado, zero falhas.
+- Cobertura: 58,47% de linhas e 39,20% de branches.
+- Nenhum pacote vulnerável.
+- Nenhuma dependência direta desatualizada.
+- Formatação e git diff --check aprovados.
+- Pacotes NFEConsulta 1.0.1 e NFEConsulta.Cli 1.0.1 gerados.
+
+## Unreleased
+
+
 ## 0.4.0
 - Adicionado suporte nativo para consulta de cadastro de contribuintes da SEFAZ via Web Service `CadConsultaCadastro4` (consulta por CNPJ, CPF ou IE).
 - Introduzido `NFeCadastroClient`, `SefazCadastroService` e `SefazCadastroResponseParser`.

@@ -15,6 +15,15 @@ public static class NFeXmlValidator
         if (string.IsNullOrWhiteSpace(xml))
             return Invalid("XML nao informado.");
 
+        try
+        {
+            XmlInputLimits.EnsureTextWithinLimit(xml);
+        }
+        catch (InvalidDataException ex)
+        {
+            return Invalid(ex.Message);
+        }
+
         XDocument document;
         try
         {
@@ -57,60 +66,72 @@ public static class NFeXmlValidator
         if (xmlStream is null)
             throw new ArgumentNullException(nameof(xmlStream));
 
-        using MemoryStream buffer = new();
-        await xmlStream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
-        buffer.Position = 0;
-
-        string rootSchemaFile;
+        MemoryStream buffer;
         try
         {
-            rootSchemaFile = ResolveRootSchemaFile(buffer);
-            buffer.Position = 0;
+            buffer = await XmlInputLimits
+                .CopyToMemoryAsync(xmlStream, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
-        catch (XmlException ex)
+        catch (InvalidDataException ex)
         {
-            return Invalid($"XML invalido: {ex.Message}");
+            return Invalid(ex.Message);
         }
 
-        XmlSchemaSet schemas = LoadSchemas(xsdDirectory, rootSchemaFile);
-        List<string> errors = [];
-
-        try
+        using (buffer)
         {
-            XmlReaderSettings settings = new()
+
+            string rootSchemaFile;
+            try
             {
-                Async = true,
-                DtdProcessing = DtdProcessing.Prohibit,
-                XmlResolver = null,
-                ValidationType = ValidationType.Schema,
-                Schemas = schemas
-            };
-
-            settings.ValidationEventHandler += (_, args) =>
-            {
-                XmlSchemaException exception = args.Exception;
-                string location = exception.LineNumber > 0
-                    ? $"Linha {exception.LineNumber}, coluna {exception.LinePosition}: "
-                    : string.Empty;
-
-                errors.Add($"{location}{args.Severity}: {args.Message}");
-            };
-
-            using XmlReader reader = XmlReader.Create(buffer, settings);
-
-            while (await reader.ReadAsync().ConfigureAwait(false))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+                rootSchemaFile = ResolveRootSchemaFile(buffer);
+                buffer.Position = 0;
             }
-        }
-        catch (XmlException ex)
-        {
-            return Invalid($"XML invalido: {ex.Message}");
-        }
+            catch (XmlException ex)
+            {
+                return Invalid($"XML invalido: {ex.Message}");
+            }
 
-        return errors.Count == 0
-            ? new NFeXmlValidationResult(true, Array.Empty<string>())
-            : new NFeXmlValidationResult(false, errors);
+            XmlSchemaSet schemas = LoadSchemas(xsdDirectory, rootSchemaFile);
+            List<string> errors = [];
+
+            try
+            {
+                XmlReaderSettings settings = new()
+                {
+                    Async = true,
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    XmlResolver = null,
+                    ValidationType = ValidationType.Schema,
+                    Schemas = schemas
+                };
+
+                settings.ValidationEventHandler += (_, args) =>
+                {
+                    XmlSchemaException exception = args.Exception;
+                    string location = exception.LineNumber > 0
+                        ? $"Linha {exception.LineNumber}, coluna {exception.LinePosition}: "
+                        : string.Empty;
+
+                    errors.Add($"{location}{args.Severity}: {args.Message}");
+                };
+
+                using XmlReader reader = XmlReader.Create(buffer, settings);
+
+                while (await reader.ReadAsync().ConfigureAwait(false))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+            }
+            catch (XmlException ex)
+            {
+                return Invalid($"XML invalido: {ex.Message}");
+            }
+
+            return errors.Count == 0
+                ? new NFeXmlValidationResult(true, Array.Empty<string>())
+                : new NFeXmlValidationResult(false, errors);
+        }
     }
 
     public static async Task<NFeXmlValidationResult> ValidateXmlFileAsync(
@@ -160,15 +181,13 @@ public static class NFeXmlValidator
         if (xsdFiles.Length == 0)
             throw new InvalidOperationException($"XSD raiz '{rootSchemaFileName}' nao encontrado em: {xsdDirectory}");
 
-        XmlSchemaSet schemas = new()
-        {
-            XmlResolver = new XmlUrlResolver()
-        };
+        RestrictedXmlResolver resolver = new(xsdDirectory);
+        XmlSchemaSet schemas = new() { XmlResolver = resolver };
 
         XmlReaderSettings settings = new()
         {
             DtdProcessing = DtdProcessing.Prohibit,
-            XmlResolver = new XmlUrlResolver()
+            XmlResolver = resolver
         };
 
         string xsdFile = xsdFiles.OrderBy(static path => path, StringComparer.Ordinal).First();
@@ -210,6 +229,12 @@ public static class NFeXmlValidator
     {
         if (string.IsNullOrWhiteSpace(version))
             throw new XmlException("Elemento raiz sem atributo versao.");
+
+        if (version.Count(static character => character == '.') != 1
+            || version.Any(static character => !char.IsAsciiDigit(character) && character != '.'))
+        {
+            throw new XmlException("A versao do XML possui formato invalido.");
+        }
 
         string schemaPrefix = rootLocalName switch
         {

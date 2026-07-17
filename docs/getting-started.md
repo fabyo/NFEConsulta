@@ -24,7 +24,6 @@ using X509Certificate2 certificado = CertificadoProvider.ObterPorPem(
 NFeConsultaOptions options = new()
 {
     Ambiente = TipoAmbiente.Producao,
-    Uf = UfNFe.SP,
     CorrelationId = "job-001"
 };
 
@@ -32,6 +31,9 @@ using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(certifica
 
 ConsultaNFeResult result = await client.ConsultarChaveAsync("35260600000000000100550010000000011000000006");
 ```
+
+Quando `Uf` e omitida, consultas por chave inferem o estado automaticamente.
+Para status e cadastro, informe a UF quando nao quiser o fallback SP.
 
 ## Status Oficial
 

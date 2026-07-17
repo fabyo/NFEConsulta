@@ -1,537 +1,668 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Xml;
 using Microsoft.Extensions.Logging.Abstractions;
 using NFEConsulta.Infrastructure;
 using NFEConsulta.Models;
 using NFEConsulta.Services;
+using Xunit;
 
-List<(string Name, Func<Task> Run)> tests =
-[
-    ("Chave valida normaliza e valida DV", TestChaveValida),
-    ("Chave invalida retorna erro", TestChaveInvalida),
-    ("Extrai chave do XML por chNFe", TestExtraiChavePorChNFe),
-    ("Extrai chave do XML por infNFe Id", TestExtraiChavePorInfNFeId),
-    ("Parser reconhece autorizada", TestParserAutorizada),
-    ("Parser reconhece cancelada", TestParserCancelada),
-    ("Parser reconhece nao encontrada", TestParserNaoEncontrada),
-    ("Parser classifica XML invalido", TestParserXmlInvalido),
-    ("Resultado orienta politica de retry", TestPoliticaResultadoConsulta),
-    ("Status orienta reagendamento fiscal", TestPoliticaStatusSefaz),
-    ("Endpoint resolve SP default", TestEndpointSp),
-    ("Endpoint status resolve SP default", TestEndpointStatusSp),
-    ("Endpoint resolve UF por chave", TestEndpointPorChave),
-    ("Tabela de endpoints cobre todas as UFs", TestTabelaEndpointsCobreTodasUfs),
-    ("Tabela de status cobre todas as UFs", TestTabelaStatusCobreTodasUfs),
-    ("Endpoint SP marcado como validado localmente", TestEndpointSpValidadoLocalmente),
-    ("UF invalida lanca excecao", TestUfInvalidaExcecao),
-    ("Client retorna erro para UF invalida", TestClientUfInvalida),
-    ("Override permite UF nao mapeada", TestOverridePermiteUfNaoMapeada),
-    ("Parser de status reconhece SEFAZ online", TestParserStatusOnline),
-    ("Status client retorna erro para UF invalida", TestStatusClientUfInvalida),
-    ("Status service faz retry em falha transitoria", TestStatusRetryTransitorio),
-    ("CorrelationId propaga na consulta", TestCorrelationIdConsulta),
-    ("CorrelationId propaga no status", TestCorrelationIdStatus),
-    ("Client retorna falha XML sem excecao", TestClientXmlInvalido),
-    ("Servico faz retry em falha transitoria", TestRetryTransitorio),
-    ("Integracao real opcional por env", TestIntegracaoRealOpcional),
-    ("Parser de Cadastro reconhece resposta com IE localizada", TestParserCadastro),
-    ("Cadastro client realiza consulta com sucesso", TestCadastroClient)
-];
-
-int failures = 0;
-
-foreach ((string name, Func<Task> run) in tests)
+public sealed class NfeConsultaTests
 {
-    try
+
+    [Fact]
+    public Task TestChaveValida()
     {
-        await run().ConfigureAwait(false);
-        Console.WriteLine($"PASS {name}");
+        ChaveAcessoValidationResult result = ChaveAcessoNFe.Validate("3526 0600 0000 0000 0100 5500 1000 0000 0110 0000 0006");
+
+        Assert.True(result.IsValid, result.ErrorMessage ?? "Chave deveria ser valida.");
+        Assert.Equal(TestData.Chave, result.ChaveAcesso);
+        return Task.CompletedTask;
     }
-    catch (SkipTestException ex)
+
+    [Fact]
+    public Task TestChaveInvalida()
     {
-        Console.WriteLine($"SKIP {name}: {ex.Message}");
+        ChaveAcessoValidationResult result = ChaveAcessoNFe.Validate(TestData.Chave[..43] + "9");
+
+        Assert.False(result.IsValid, "Chave com DV errado deveria falhar.");
+        Assert.Contains("Digito verificador", result.ErrorMessage);
+        return Task.CompletedTask;
     }
-    catch (Exception ex)
+
+    [Fact]
+    public Task TestExtraiChavePorChNFe()
     {
-        failures++;
-        Console.Error.WriteLine($"FAIL {name}: {ex.Message}");
+        string chave = ChaveAcessoNFe.ExtractFromXml(TestData.XmlComChNFe);
+
+        Assert.Equal(TestData.Chave, chave);
+        return Task.CompletedTask;
     }
-}
 
-return failures == 0 ? 0 : 1;
-
-static Task TestChaveValida()
-{
-    ChaveAcessoValidationResult result = ChaveAcessoNFe.Validate("3526 0600 0000 0000 0100 5500 1000 0000 0110 0000 0006");
-
-    Assert.True(result.IsValid, result.ErrorMessage ?? "Chave deveria ser valida.");
-    Assert.Equal(TestData.Chave, result.ChaveAcesso);
-    return Task.CompletedTask;
-}
-
-static Task TestChaveInvalida()
-{
-    ChaveAcessoValidationResult result = ChaveAcessoNFe.Validate(TestData.Chave[..43] + "9");
-
-    Assert.False(result.IsValid, "Chave com DV errado deveria falhar.");
-    Assert.Contains("Digito verificador", result.ErrorMessage);
-    return Task.CompletedTask;
-}
-
-static Task TestExtraiChavePorChNFe()
-{
-    string chave = ChaveAcessoNFe.ExtractFromXml(TestData.XmlComChNFe);
-
-    Assert.Equal(TestData.Chave, chave);
-    return Task.CompletedTask;
-}
-
-static Task TestExtraiChavePorInfNFeId()
-{
-    string chave = ChaveAcessoNFe.ExtractFromXml(TestData.XmlComInfNFeId);
-
-    Assert.Equal(TestData.Chave, chave);
-    return Task.CompletedTask;
-}
-
-static Task TestParserAutorizada()
-{
-    ConsultaNFeResult result = SefazResponseParser.Parse(TestData.RespostaAutorizada);
-
-    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Consulta deveria ser sucesso.");
-    Assert.Equal(StatusNFe.Autorizada, result.Status);
-    Assert.Equal(TipoResultadoConsulta.ConsultaOk, result.TipoResultado);
-    Assert.True(result.RespostaSefazRecebida, "Resposta SEFAZ deveria estar marcada.");
-    Assert.Equal("123456789012345", result.NumeroProtocolo);
-    return Task.CompletedTask;
-}
-
-static Task TestParserCancelada()
-{
-    ConsultaNFeResult result = SefazResponseParser.Parse(TestData.RespostaCancelada);
-
-    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Consulta deveria ser sucesso.");
-    Assert.Equal(StatusNFe.Cancelada, result.Status);
-    Assert.Equal(TipoResultadoConsulta.ConsultaOk, result.TipoResultado);
-    Assert.Equal("Cancelamento registrado", result.Motivo);
-    return Task.CompletedTask;
-}
-
-static Task TestParserNaoEncontrada()
-{
-    ConsultaNFeResult result = SefazResponseParser.Parse(TestData.RespostaNaoEncontrada);
-
-    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Resposta fiscal conhecida deveria ser sucesso operacional.");
-    Assert.Equal(StatusNFe.NaoEncontrada, result.Status);
-    Assert.Equal(TipoResultadoConsulta.RespostaSefazNegativa, result.TipoResultado);
-    return Task.CompletedTask;
-}
-
-static Task TestParserXmlInvalido()
-{
-    ConsultaNFeResult result = SefazResponseParser.Parse("<retConsSitNFe>");
-
-    Assert.False(result.Sucesso, "XML invalido deveria falhar.");
-    Assert.Equal(TipoResultadoConsulta.FalhaXml, result.TipoResultado);
-    Assert.True(result.RespostaSefazRecebida, "A falha veio da resposta recebida.");
-    return Task.CompletedTask;
-}
-
-static Task TestPoliticaResultadoConsulta()
-{
-    ConsultaNFeResult timeout = ConsultaNFeResult.Erro("timeout", TipoResultadoConsulta.Timeout);
-    ConsultaNFeResult xml = ConsultaNFeResult.Erro("xml", TipoResultadoConsulta.FalhaXml);
-    ConsultaNFeResult certificado = ConsultaNFeResult.Erro("certificado", TipoResultadoConsulta.FalhaCertificado);
-
-    Assert.True(timeout.DeveRetentarComBackoff, "Timeout deveria orientar retry com backoff.");
-    Assert.False(xml.DeveRetentarComBackoff, "FalhaXml nao deveria orientar retry automatico.");
-    Assert.True(xml.RequerCorrecaoDeEntrada, "FalhaXml deveria exigir correcao de entrada.");
-    Assert.True(certificado.RequerAlertaOperacional, "FalhaCertificado deveria exigir alerta operacional.");
-
-    return Task.CompletedTask;
-}
-
-static Task TestPoliticaStatusSefaz()
-{
-    SefazStatusResult processamento = SefazStatusResponseParser.Parse(
-        TestData.RespostaStatusProcessamento,
-        UfNFe.SP,
-        TipoAmbiente.Homologacao,
-        "https://sefaz.test",
-        TimeSpan.FromMilliseconds(100));
-
-    Assert.False(processamento.Online, "Status 108 nao deveria indicar online.");
-    Assert.True(processamento.ServicoEmProcessamento, "Status 108 deveria indicar servico em processamento.");
-    Assert.True(processamento.DeveReagendarProcessamento, "Status 108 deveria orientar reagendamento.");
-
-    return Task.CompletedTask;
-}
-
-static Task TestEndpointSp()
-{
-    string url = SefazEndpointResolver.ResolveConsultaProtocolo(UfNFe.SP, TipoAmbiente.Homologacao);
-
-    Assert.Equal("https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx", url);
-    return Task.CompletedTask;
-}
-
-static Task TestEndpointStatusSp()
-{
-    string url = SefazEndpointResolver.ResolveStatusServico(UfNFe.SP, TipoAmbiente.Homologacao);
-
-    Assert.Equal("https://homologacao.nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx", url);
-    return Task.CompletedTask;
-}
-
-static Task TestEndpointPorChave()
-{
-    UfNFe uf = SefazEndpointResolver.InferUfFromChave(TestData.Chave);
-
-    Assert.Equal(UfNFe.SP, uf);
-    return Task.CompletedTask;
-}
-
-static Task TestTabelaEndpointsCobreTodasUfs()
-{
-    UfNFe[] ufs = Enum.GetValues<UfNFe>();
-    IReadOnlyCollection<SefazEndpointInfo> endpoints = SefazEndpointResolver.ListarEndpointsConsultaProtocolo();
-
-    Assert.Equal(ufs.Length, endpoints.Count);
-    foreach (UfNFe uf in ufs)
-        Assert.True(endpoints.Any(endpoint => endpoint.Uf == uf), $"UF {uf} nao esta na tabela de endpoints.");
-
-    return Task.CompletedTask;
-}
-
-static Task TestTabelaStatusCobreTodasUfs()
-{
-    UfNFe[] ufs = Enum.GetValues<UfNFe>();
-    IReadOnlyCollection<SefazEndpointInfo> endpoints = SefazEndpointResolver.ListarEndpointsStatusServico();
-
-    Assert.Equal(ufs.Length, endpoints.Count);
-    foreach (UfNFe uf in ufs)
-        Assert.True(endpoints.Any(endpoint => endpoint.Uf == uf), $"UF {uf} nao esta na tabela de status.");
-
-    return Task.CompletedTask;
-}
-
-static Task TestEndpointSpValidadoLocalmente()
-{
-    SefazEndpointInfo consulta = SefazEndpointResolver
-        .ListarEndpointsConsultaProtocolo()
-        .Single(endpoint => endpoint.Uf == UfNFe.SP);
-    SefazEndpointInfo status = SefazEndpointResolver
-        .ListarEndpointsStatusServico()
-        .Single(endpoint => endpoint.Uf == UfNFe.SP);
-
-    Assert.Equal(ValidacaoEndpoint.ValidadoLocalmente, consulta.Validacao);
-    Assert.Equal(ValidacaoEndpoint.ValidadoLocalmente, status.Validacao);
-    return Task.CompletedTask;
-}
-
-static Task TestUfInvalidaExcecao()
-{
-    Assert.Throws<NotSupportedException>(() =>
-        SefazEndpointResolver.ResolveConsultaProtocolo((UfNFe)99, TipoAmbiente.Homologacao));
-
-    return Task.CompletedTask;
-}
-
-static async Task TestClientUfInvalida()
-{
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
-    SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
-    using NFeConsultaClient client = new(service, new NFeConsultaOptions { Uf = (UfNFe)99 });
-
-    ConsultaNFeResult result = await client.ConsultarChaveAsync(TestData.Chave).ConfigureAwait(false);
-
-    Assert.False(result.Sucesso, "UF invalida deveria retornar erro.");
-    Assert.Equal(TipoResultadoConsulta.RequisicaoInvalida, result.TipoResultado);
-    Assert.Contains("nao possui endpoint", result.ErroDetalhado);
-}
-
-static async Task TestOverridePermiteUfNaoMapeada()
-{
-    int calls = 0;
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
+    [Fact]
+    public Task TestExtraiChavePorInfNFeId()
     {
-        calls++;
-        return new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
-        };
-    }));
+        string chave = ChaveAcessoNFe.ExtractFromXml(TestData.XmlComInfNFeId);
 
-    SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
-    using NFeConsultaClient client = new(
-        service,
-        new NFeConsultaOptions
-        {
-            Uf = (UfNFe)99,
-            UrlWebServiceOverride = "https://sefaz.test"
-        });
-
-    ConsultaNFeResult result = await client.ConsultarChaveAsync(TestData.Chave).ConfigureAwait(false);
-
-    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Override deveria permitir consulta.");
-    Assert.Equal(1, calls);
-}
-
-static Task TestParserStatusOnline()
-{
-    SefazStatusResult result = SefazStatusResponseParser.Parse(
-        TestData.RespostaStatusOnline,
-        UfNFe.SP,
-        TipoAmbiente.Homologacao,
-        "https://sefaz.test",
-        TimeSpan.FromMilliseconds(120));
-
-    Assert.True(result.Online, "Status 107 deveria indicar SEFAZ online.");
-    Assert.Equal("107", result.CodigoStatus);
-    Assert.Equal(TipoResultadoConsulta.ConsultaOk, result.TipoResultado);
-    Assert.True(result.RespostaSefazRecebida, "Resposta SEFAZ deveria estar marcada.");
-    return Task.CompletedTask;
-}
-
-static async Task TestStatusClientUfInvalida()
-{
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
-    SefazStatusService service = new(httpClient, NullLogger<SefazStatusService>.Instance);
-    using NFeStatusClient client = new(service, new NFeConsultaOptions { Uf = (UfNFe)99 });
-
-    SefazStatusResult result = await client.ConsultarStatusAsync().ConfigureAwait(false);
-
-    Assert.False(result.Online, "UF invalida deveria retornar offline.");
-    Assert.Equal(TipoResultadoConsulta.RequisicaoInvalida, result.TipoResultado);
-    Assert.Contains("nao possui endpoint", result.ErroDetalhado);
-}
-
-static async Task TestStatusRetryTransitorio()
-{
-    int calls = 0;
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
-    {
-        calls++;
-
-        if (calls == 1)
-            throw new HttpRequestException("Falha simulada.");
-
-        return new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent(TestData.RespostaStatusOnline, Encoding.UTF8, "application/xml")
-        };
-    }));
-
-    SefazStatusService service = new(httpClient, NullLogger<SefazStatusService>.Instance);
-    SefazStatusResult result = await service
-        .ConsultarStatusAsync(new SefazStatusRequest(UfNFe.SP, TipoAmbiente.Homologacao, "https://sefaz.test")
-        {
-            RetryCount = 1
-        })
-        .ConfigureAwait(false);
-
-    Assert.True(result.Online, result.ErroDetalhado ?? "Status deveria ficar online apos retry.");
-    Assert.Equal(2, calls);
-}
-
-static async Task TestCorrelationIdConsulta()
-{
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
-    {
-        Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
-    }));
-
-    SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
-    using NFeConsultaClient client = new(
-        service,
-        new NFeConsultaOptions
-        {
-            UrlWebServiceOverride = "https://sefaz.test",
-            CorrelationId = "job-123"
-        });
-
-    ConsultaNFeResult result = await client.ConsultarChaveAsync(TestData.Chave).ConfigureAwait(false);
-
-    Assert.Equal("job-123", result.CorrelationId);
-}
-
-static async Task TestCorrelationIdStatus()
-{
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
-    {
-        Content = new StringContent(TestData.RespostaStatusOnline, Encoding.UTF8, "application/xml")
-    }));
-
-    SefazStatusService service = new(httpClient, NullLogger<SefazStatusService>.Instance);
-    using NFeStatusClient client = new(
-        service,
-        new NFeConsultaOptions
-        {
-            UrlStatusWebServiceOverride = "https://sefaz.test",
-            CorrelationId = "status-456"
-        });
-
-    SefazStatusResult result = await client.ConsultarStatusAsync().ConfigureAwait(false);
-
-    Assert.Equal("status-456", result.CorrelationId);
-}
-
-static async Task TestClientXmlInvalido()
-{
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
-    SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
-    using NFeConsultaClient client = new(service, new NFeConsultaOptions());
-
-    ConsultaNFeResult result = await client.ConsultarXmlAsync("<NFe>").ConfigureAwait(false);
-
-    Assert.False(result.Sucesso, "XML invalido deveria retornar falha.");
-    Assert.Equal(TipoResultadoConsulta.FalhaXml, result.TipoResultado);
-}
-
-static async Task TestRetryTransitorio()
-{
-    int calls = 0;
-    using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
-    {
-        calls++;
-
-        if (calls == 1)
-            throw new HttpRequestException("Falha simulada.");
-
-        return new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
-        };
-    }));
-
-    SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
-    ConsultaNFeResult result = await service
-        .ConsultarAsync(new ConsultaNFeRequest(TestData.Chave, TipoAmbiente.Homologacao, "https://sefaz.test")
-        {
-            RetryCount = 1
-        })
-        .ConfigureAwait(false);
-
-    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Consulta deveria ter sucesso apos retry.");
-    Assert.Equal(2, calls);
-}
-
-static async Task TestIntegracaoRealOpcional()
-{
-    if (!string.Equals(Environment.GetEnvironmentVariable("NFE_RUN_INTEGRATION"), "1", StringComparison.Ordinal))
-        throw new SkipTestException("defina NFE_RUN_INTEGRATION=1 para rodar consulta real.");
-
-    string certPemPath = Environment.GetEnvironmentVariable("NFE_CERT_PEM") ?? Path.Combine("certs", "cert.pem");
-    string keyPemPath = Environment.GetEnvironmentVariable("NFE_KEY_PEM") ?? Path.Combine("certs", "key.pem");
-    string xmlPath = Environment.GetEnvironmentVariable("NFE_XML_PATH") ?? "xml";
-
-    if (!File.Exists(certPemPath) || !File.Exists(keyPemPath))
-        throw new SkipTestException("certificado PEM local nao encontrado.");
-
-    string[] xmlFiles = ResolveXmlFiles(xmlPath);
-    if (xmlFiles.Length == 0)
-        throw new SkipTestException("nenhum XML local encontrado para integracao.");
-
-    using X509Certificate2 certificado = CertificadoProvider.ObterPorPem(certPemPath, keyPemPath);
-    NFeConsultaOptions options = new()
-    {
-        Ambiente = ParseAmbiente(Environment.GetEnvironmentVariable("NFE_AMBIENTE") ?? "homologacao"),
-        Uf = ParseUfOrDefault(Environment.GetEnvironmentVariable("NFE_UF")),
-        Timeout = TimeSpan.FromSeconds(ParseIntOrDefault(Environment.GetEnvironmentVariable("NFE_TIMEOUT_SECONDS"), 60)),
-        RetryCount = ParseIntOrDefault(Environment.GetEnvironmentVariable("NFE_RETRY_COUNT"), 2)
-    };
-
-    using NFeStatusClient statusClient = NFeStatusClient.CriarComCertificado(certificado, options);
-    SefazStatusResult status = await statusClient.ConsultarStatusAsync().ConfigureAwait(false);
-
-    Assert.False(status.EhFalhaTecnica, status.ErroDetalhado ?? "Status real nao deveria retornar falha tecnica.");
-    Assert.True(status.RespostaSefazRecebida, "Status real deveria receber resposta da SEFAZ.");
-
-    using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(certificado, options);
-    foreach (string file in xmlFiles)
-    {
-        ConsultaNFeResult result = await client.ConsultarXmlFileAsync(file).ConfigureAwait(false);
-
-        Assert.False(result.TipoResultado == TipoResultadoConsulta.Desconhecido, "Resultado real nao deveria ficar desconhecido.");
-        Assert.False(result.EhFalhaTecnica, result.ErroDetalhado ?? "Consulta real nao deveria retornar falha tecnica.");
-        Assert.True(result.RespostaSefazRecebida, "Consulta real deveria receber resposta da SEFAZ.");
+        Assert.Equal(TestData.Chave, chave);
+        return Task.CompletedTask;
     }
-}
 
-static string[] ResolveXmlFiles(string xmlPath)
-{
-    if (File.Exists(xmlPath))
-        return [xmlPath];
+    [Fact]
+    public Task TestParserAutorizada()
+    {
+        ConsultaNFeResult result = SefazResponseParser.Parse(TestData.RespostaAutorizada);
 
-    return Directory.Exists(xmlPath)
-        ? Directory.GetFiles(xmlPath, "*.xml", SearchOption.TopDirectoryOnly)
-            .OrderBy(static path => path, StringComparer.Ordinal)
-            .ToArray()
-        : [];
-}
+        Assert.True(result.Sucesso, result.ErroDetalhado ?? "Consulta deveria ser sucesso.");
+        Assert.Equal(StatusNFe.Autorizada, result.Status);
+        Assert.Equal(TipoResultadoConsulta.ConsultaOk, result.TipoResultado);
+        Assert.True(result.RespostaSefazRecebida, "Resposta SEFAZ deveria estar marcada.");
+        Assert.Equal("123456789012345", result.NumeroProtocolo);
+        return Task.CompletedTask;
+    }
 
-static TipoAmbiente ParseAmbiente(string value) => value.Trim().ToLowerInvariant() switch
-{
-    "1" or "producao" => TipoAmbiente.Producao,
-    "2" or "homologacao" => TipoAmbiente.Homologacao,
-    _ => throw new ArgumentException("NFE_AMBIENTE invalido.")
-};
+    [Fact]
+    public Task TestParserCancelada()
+    {
+        ConsultaNFeResult result = SefazResponseParser.Parse(TestData.RespostaCancelada);
 
-static UfNFe? ParseUfOrDefault(string? value) =>
-    string.IsNullOrWhiteSpace(value) ? UfNFe.SP : SefazEndpointResolver.ParseUf(value);
+        Assert.True(result.Sucesso, result.ErroDetalhado ?? "Consulta deveria ser sucesso.");
+        Assert.Equal(StatusNFe.Cancelada, result.Status);
+        Assert.Equal(TipoResultadoConsulta.ConsultaOk, result.TipoResultado);
+        Assert.Equal("Cancelamento registrado", result.Motivo);
+        return Task.CompletedTask;
+    }
 
-static int ParseIntOrDefault(string? value, int fallback) =>
-    int.TryParse(value, out int parsed) && parsed >= 0 ? parsed : fallback;
+    [Fact]
+    public Task TestParserNaoEncontrada()
+    {
+        ConsultaNFeResult result = SefazResponseParser.Parse(TestData.RespostaNaoEncontrada);
 
-static Task TestParserCadastro()
-{
-    CadastroConsultaResult result = SefazCadastroResponseParser.Parse(TestData.RespostaCadastroLocalizado);
+        Assert.True(result.Sucesso, result.ErroDetalhado ?? "Resposta fiscal conhecida deveria ser sucesso operacional.");
+        Assert.Equal(StatusNFe.NaoEncontrada, result.Status);
+        Assert.Equal(TipoResultadoConsulta.RespostaSefazNegativa, result.TipoResultado);
+        return Task.CompletedTask;
+    }
 
-    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Cadastro deveria ser sucesso.");
-    Assert.Equal("111", result.CodigoStatus);
-    Assert.Equal(1, result.Contribuintes.Count);
+    [Fact]
+    public Task TestParserXmlInvalido()
+    {
+        ConsultaNFeResult result = SefazResponseParser.Parse("<retConsSitNFe>");
 
-    var cad = result.Contribuintes[0];
-    Assert.Equal("110042490114", cad.IE);
-    Assert.Equal("12345678901234", cad.CNPJ);
-    Assert.Equal("SP", cad.UF);
-    Assert.Equal("Habilitado", cad.Situacao);
-    Assert.Equal("EMPRESA TESTE LTDA", cad.Nome);
-    Assert.Equal("TESTE ME", cad.NomeFantasia);
-    Assert.Equal("AVENIDA PAULISTA", cad.Endereco?.Logradouro);
-    Assert.Equal("1000", cad.Endereco?.Numero);
-    return Task.CompletedTask;
-}
+        Assert.False(result.Sucesso, "XML invalido deveria falhar.");
+        Assert.Equal(TipoResultadoConsulta.FalhaXml, result.TipoResultado);
+        Assert.True(result.RespostaSefazRecebida, "A falha veio da resposta recebida.");
+        return Task.CompletedTask;
+    }
 
-static async Task TestCadastroClient()
-{
-    using SefazCadastroService service = new(
-        new HttpClient(new StubHttpMessageHandler(req =>
+    [Fact]
+    public Task TestPoliticaResultadoConsulta()
+    {
+        ConsultaNFeResult timeout = ConsultaNFeResult.Erro("timeout", TipoResultadoConsulta.Timeout);
+        ConsultaNFeResult xml = ConsultaNFeResult.Erro("xml", TipoResultadoConsulta.FalhaXml);
+        ConsultaNFeResult certificado = ConsultaNFeResult.Erro("certificado", TipoResultadoConsulta.FalhaCertificado);
+
+        Assert.True(timeout.DeveRetentarComBackoff, "Timeout deveria orientar retry com backoff.");
+        Assert.False(xml.DeveRetentarComBackoff, "FalhaXml nao deveria orientar retry automatico.");
+        Assert.True(xml.RequerCorrecaoDeEntrada, "FalhaXml deveria exigir correcao de entrada.");
+        Assert.True(certificado.RequerAlertaOperacional, "FalhaCertificado deveria exigir alerta operacional.");
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestPoliticaStatusSefaz()
+    {
+        SefazStatusResult processamento = SefazStatusResponseParser.Parse(
+            TestData.RespostaStatusProcessamento,
+            UfNFe.SP,
+            TipoAmbiente.Homologacao,
+            "https://sefaz.test",
+            TimeSpan.FromMilliseconds(100));
+
+        Assert.False(processamento.Online, "Status 108 nao deveria indicar online.");
+        Assert.True(processamento.ServicoEmProcessamento, "Status 108 deveria indicar servico em processamento.");
+        Assert.True(processamento.DeveReagendarProcessamento, "Status 108 deveria orientar reagendamento.");
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestEndpointSp()
+    {
+        string url = SefazEndpointResolver.ResolveConsultaProtocolo(UfNFe.SP, TipoAmbiente.Homologacao);
+
+        Assert.Equal("https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx", url);
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestEndpointStatusSp()
+    {
+        string url = SefazEndpointResolver.ResolveStatusServico(UfNFe.SP, TipoAmbiente.Homologacao);
+
+        Assert.Equal("https://homologacao.nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx", url);
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestEndpointPorChave()
+    {
+        UfNFe uf = SefazEndpointResolver.InferUfFromChave(TestData.Chave);
+
+        Assert.Equal(UfNFe.SP, uf);
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TestClientInfereUfDaChaveQuandoNaoConfigurada()
+    {
+        Uri? requestedUri = null;
+        using HttpClient httpClient = new(new StubHttpMessageHandler(request =>
         {
+            requestedUri = request.RequestUri;
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(TestData.RespostaCadastroLocalizado, Encoding.UTF8, "application/soap+xml")
+                Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
             };
-        })),
-        NullLogger<SefazCadastroService>.Instance);
+        }));
 
-    NFeConsultaOptions options = new()
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        using NFeConsultaClient client = new(service, new NFeConsultaOptions());
+
+        await client.ConsultarChaveAsync(TestData.ChaveMg);
+
+        Assert.True(requestedUri is not null, "A consulta deveria realizar uma chamada HTTP.");
+        Assert.Contains("fazenda.mg.gov.br", requestedUri!.Host);
+    }
+
+    [Fact]
+    public Task TestTabelaEndpointsCobreTodasUfs()
     {
-        Ambiente = TipoAmbiente.Homologacao,
-        Uf = UfNFe.SP
+        UfNFe[] ufs = Enum.GetValues<UfNFe>();
+        IReadOnlyCollection<SefazEndpointInfo> endpoints = SefazEndpointResolver.ListarEndpointsConsultaProtocolo();
+
+        Assert.Equal(ufs.Length, endpoints.Count);
+        foreach (UfNFe uf in ufs)
+            Assert.True(endpoints.Any(endpoint => endpoint.Uf == uf), $"UF {uf} nao esta na tabela de endpoints.");
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestTabelaStatusCobreTodasUfs()
+    {
+        UfNFe[] ufs = Enum.GetValues<UfNFe>();
+        IReadOnlyCollection<SefazEndpointInfo> endpoints = SefazEndpointResolver.ListarEndpointsStatusServico();
+
+        Assert.Equal(ufs.Length, endpoints.Count);
+        foreach (UfNFe uf in ufs)
+            Assert.True(endpoints.Any(endpoint => endpoint.Uf == uf), $"UF {uf} nao esta na tabela de status.");
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestEndpointSpValidadoLocalmente()
+    {
+        SefazEndpointInfo consulta = SefazEndpointResolver
+            .ListarEndpointsConsultaProtocolo()
+            .Single(endpoint => endpoint.Uf == UfNFe.SP);
+        SefazEndpointInfo status = SefazEndpointResolver
+            .ListarEndpointsStatusServico()
+            .Single(endpoint => endpoint.Uf == UfNFe.SP);
+
+        Assert.Equal(ValidacaoEndpoint.ValidadoLocalmente, consulta.Validacao);
+        Assert.Equal(ValidacaoEndpoint.ValidadoLocalmente, status.Validacao);
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestUfInvalidaExcecao()
+    {
+        Assert.Throws<NotSupportedException>(() =>
+            SefazEndpointResolver.ResolveConsultaProtocolo((UfNFe)99, TipoAmbiente.Homologacao));
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TestClientUfInvalida()
+    {
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        using NFeConsultaClient client = new(service, new NFeConsultaOptions { Uf = (UfNFe)99 });
+
+        ConsultaNFeResult result = await client.ConsultarChaveAsync(TestData.Chave);
+
+        Assert.False(result.Sucesso, "UF invalida deveria retornar erro.");
+        Assert.Equal(TipoResultadoConsulta.RequisicaoInvalida, result.TipoResultado);
+        Assert.Contains("nao possui endpoint", result.ErroDetalhado);
+    }
+
+    [Fact]
+    public async Task TestOverridePermiteUfNaoMapeada()
+    {
+        int calls = 0;
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
+        {
+            calls++;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
+            };
+        }));
+
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        using NFeConsultaClient client = new(
+            service,
+            new NFeConsultaOptions
+            {
+                Uf = (UfNFe)99,
+                UrlWebServiceOverride = "https://sefaz.test"
+            });
+
+        ConsultaNFeResult result = await client.ConsultarChaveAsync(TestData.Chave);
+
+        Assert.True(result.Sucesso, result.ErroDetalhado ?? "Override deveria permitir consulta.");
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public Task TestParserStatusOnline()
+    {
+        SefazStatusResult result = SefazStatusResponseParser.Parse(
+            TestData.RespostaStatusOnline,
+            UfNFe.SP,
+            TipoAmbiente.Homologacao,
+            "https://sefaz.test",
+            TimeSpan.FromMilliseconds(120));
+
+        Assert.True(result.Online, "Status 107 deveria indicar SEFAZ online.");
+        Assert.Equal("107", result.CodigoStatus);
+        Assert.Equal(TipoResultadoConsulta.ConsultaOk, result.TipoResultado);
+        Assert.True(result.RespostaSefazRecebida, "Resposta SEFAZ deveria estar marcada.");
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TestStatusClientUfInvalida()
+    {
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
+        SefazStatusService service = new(httpClient, NullLogger<SefazStatusService>.Instance);
+        using NFeStatusClient client = new(service, new NFeConsultaOptions { Uf = (UfNFe)99 });
+
+        SefazStatusResult result = await client.ConsultarStatusAsync();
+
+        Assert.False(result.Online, "UF invalida deveria retornar offline.");
+        Assert.Equal(TipoResultadoConsulta.RequisicaoInvalida, result.TipoResultado);
+        Assert.Contains("nao possui endpoint", result.ErroDetalhado);
+    }
+
+    [Fact]
+    public async Task TestStatusRetryTransitorio()
+    {
+        int calls = 0;
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
+        {
+            calls++;
+
+            if (calls == 1)
+                throw new HttpRequestException("Falha simulada.");
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(TestData.RespostaStatusOnline, Encoding.UTF8, "application/xml")
+            };
+        }));
+
+        SefazStatusService service = new(httpClient, NullLogger<SefazStatusService>.Instance);
+        SefazStatusResult result = await service
+            .ConsultarStatusAsync(new SefazStatusRequest(UfNFe.SP, TipoAmbiente.Homologacao, "https://sefaz.test")
+            {
+                RetryCount = 1
+            });
+
+        Assert.True(result.Online, result.ErroDetalhado ?? "Status deveria ficar online apos retry.");
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task TestCorrelationIdConsulta()
+    {
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
+        }));
+
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        using NFeConsultaClient client = new(
+            service,
+            new NFeConsultaOptions
+            {
+                UrlWebServiceOverride = "https://sefaz.test",
+                CorrelationId = "job-123"
+            });
+
+        ConsultaNFeResult result = await client.ConsultarChaveAsync(TestData.Chave);
+
+        Assert.Equal("job-123", result.CorrelationId);
+    }
+
+    [Fact]
+    public async Task TestCorrelationIdStatus()
+    {
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(TestData.RespostaStatusOnline, Encoding.UTF8, "application/xml")
+        }));
+
+        SefazStatusService service = new(httpClient, NullLogger<SefazStatusService>.Instance);
+        using NFeStatusClient client = new(
+            service,
+            new NFeConsultaOptions
+            {
+                UrlStatusWebServiceOverride = "https://sefaz.test",
+                CorrelationId = "status-456"
+            });
+
+        SefazStatusResult result = await client.ConsultarStatusAsync();
+
+        Assert.Equal("status-456", result.CorrelationId);
+    }
+
+    [Fact]
+    public async Task TestClientXmlInvalido()
+    {
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        using NFeConsultaClient client = new(service, new NFeConsultaOptions());
+
+        ConsultaNFeResult result = await client.ConsultarXmlAsync("<NFe>");
+
+        Assert.False(result.Sucesso, "XML invalido deveria retornar falha.");
+        Assert.Equal(TipoResultadoConsulta.FalhaXml, result.TipoResultado);
+    }
+
+    [Fact]
+    public async Task TestRetryTransitorio()
+    {
+        int calls = 0;
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
+        {
+            calls++;
+
+            if (calls == 1)
+                throw new HttpRequestException("Falha simulada.");
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
+            };
+        }));
+
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        ConsultaNFeResult result = await service
+            .ConsultarAsync(new ConsultaNFeRequest(TestData.Chave, TipoAmbiente.Homologacao, "https://sefaz.test")
+            {
+                RetryCount = 1
+            });
+
+        Assert.True(result.Sucesso, result.ErroDetalhado ?? "Consulta deveria ter sucesso apos retry.");
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task TestRetryEmStatusHttpTransitorio()
+    {
+        int calls = 0;
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ =>
+        {
+            calls++;
+            return calls == 1
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(TestData.RespostaAutorizada, Encoding.UTF8, "application/xml")
+                };
+        }));
+
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        ConsultaNFeResult result = await service.ConsultarAsync(
+            new ConsultaNFeRequest(TestData.Chave, TipoAmbiente.Homologacao, "https://sefaz.test")
+            {
+                RetryCount = 1
+            });
+
+        Assert.True(result.Sucesso, result.ErroDetalhado);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task TestRejeitaRespostaSefazAcimaDoLimite()
+    {
+        byte[] oversizedResponse = new byte[(2 * 1024 * 1024) + 1];
+        using HttpClient httpClient = new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(oversizedResponse)
+        }));
+
+        SefazNFeService service = new(httpClient, NullLogger<SefazNFeService>.Instance);
+        ConsultaNFeResult result = await service.ConsultarAsync(
+            new ConsultaNFeRequest(TestData.Chave, TipoAmbiente.Homologacao, "https://sefaz.test"));
+
+        Assert.False(result.Sucesso);
+        Assert.Equal(TipoResultadoConsulta.FalhaRede, result.TipoResultado);
+        Assert.Contains("limite", result.ErroDetalhado, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TestRejeitaXmlAcimaDoLimite()
+    {
+        using MemoryStream oversizedXml = new(
+            new byte[checked((int)XmlInputLimits.DefaultMaxXmlBytes + 1)]);
+
+        InvalidDataException exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            XmlInputLimits.CopyToMemoryAsync(oversizedXml));
+
+        Assert.Contains("limite", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TestRejeitaImportacaoXsdRemota()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"nfeconsulta-xsd-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory, "nfe_v4.00.xsd"),
+                """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:include schemaLocation="https://example.invalid/external.xsd" />
+              <xs:element name="NFe" type="xs:string" />
+            </xs:schema>
+            """);
+
+            RestrictedXmlResolver resolver = new(directory);
+            XmlException exception = Assert.Throws<XmlException>(() =>
+                resolver.ResolveUri(
+                    new Uri(Path.Combine(directory, "nfe_v4.00.xsd")),
+                    "https://example.invalid/external.xsd"));
+
+            Assert.Contains("remotos", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TestRejeitaCertificadoExpirado()
+    {
+        string pfxPath = Path.Combine(Path.GetTempPath(), $"nfeconsulta-expired-{Guid.NewGuid():N}.pfx");
+
+        try
+        {
+            using RSA key = RSA.Create(2048);
+            CertificateRequest request = new(
+                "CN=NFEConsulta Teste Expirado",
+                key,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+                new OidCollection { new(TestData.ClientAuthenticationOid) },
+                critical: false));
+            using X509Certificate2 certificate = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-2),
+                DateTimeOffset.UtcNow.AddDays(-1));
+            File.WriteAllBytes(pfxPath, certificate.Export(X509ContentType.Pkcs12));
+
+            Assert.Throws<InvalidOperationException>(() => CertificadoProvider.ObterPorPfx(pfxPath, password: null));
+        }
+        finally
+        {
+            if (File.Exists(pfxPath))
+                File.Delete(pfxPath);
+        }
+    }
+
+    [IntegrationFact]
+    public async Task TestIntegracaoRealOpcional()
+    {
+        string certPemPath = Environment.GetEnvironmentVariable("NFE_CERT_PEM") ?? Path.Combine("certs", "cert.pem");
+        string keyPemPath = Environment.GetEnvironmentVariable("NFE_KEY_PEM") ?? Path.Combine("certs", "key.pem");
+        string xmlPath = Environment.GetEnvironmentVariable("NFE_XML_PATH") ?? "xml";
+
+        if (!File.Exists(certPemPath) || !File.Exists(keyPemPath))
+            throw new FileNotFoundException("Certificado PEM local nao encontrado.");
+
+        string[] xmlFiles = ResolveXmlFiles(xmlPath);
+        if (xmlFiles.Length == 0)
+            throw new InvalidOperationException("Nenhum XML local encontrado para integracao.");
+
+        using X509Certificate2 certificado = CertificadoProvider.ObterPorPem(certPemPath, keyPemPath);
+        NFeConsultaOptions options = new()
+        {
+            Ambiente = ParseAmbiente(Environment.GetEnvironmentVariable("NFE_AMBIENTE") ?? "homologacao"),
+            Uf = ParseUfOrDefault(Environment.GetEnvironmentVariable("NFE_UF")),
+            Timeout = TimeSpan.FromSeconds(ParseIntOrDefault(Environment.GetEnvironmentVariable("NFE_TIMEOUT_SECONDS"), 60)),
+            RetryCount = ParseIntOrDefault(Environment.GetEnvironmentVariable("NFE_RETRY_COUNT"), 2)
+        };
+
+        using NFeStatusClient statusClient = NFeStatusClient.CriarComCertificado(certificado, options);
+        SefazStatusResult status = await statusClient.ConsultarStatusAsync();
+
+        Assert.False(status.EhFalhaTecnica, status.ErroDetalhado ?? "Status real nao deveria retornar falha tecnica.");
+        Assert.True(status.RespostaSefazRecebida, "Status real deveria receber resposta da SEFAZ.");
+
+        using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(certificado, options);
+        foreach (string file in xmlFiles)
+        {
+            ConsultaNFeResult result = await client.ConsultarXmlFileAsync(file);
+
+            Assert.False(result.TipoResultado == TipoResultadoConsulta.Desconhecido, "Resultado real nao deveria ficar desconhecido.");
+            Assert.False(result.EhFalhaTecnica, result.ErroDetalhado ?? "Consulta real nao deveria retornar falha tecnica.");
+            Assert.True(result.RespostaSefazRecebida, "Consulta real deveria receber resposta da SEFAZ.");
+        }
+    }
+
+    static string[] ResolveXmlFiles(string xmlPath)
+    {
+        if (File.Exists(xmlPath))
+            return [xmlPath];
+
+        return Directory.Exists(xmlPath)
+            ? Directory.GetFiles(xmlPath, "*.xml", SearchOption.TopDirectoryOnly)
+                .OrderBy(static path => path, StringComparer.Ordinal)
+                .ToArray()
+            : [];
+    }
+
+    static TipoAmbiente ParseAmbiente(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "1" or "producao" => TipoAmbiente.Producao,
+        "2" or "homologacao" => TipoAmbiente.Homologacao,
+        _ => throw new ArgumentException("NFE_AMBIENTE invalido.")
     };
 
-    using NFeCadastroClient client = new(service, options);
-    CadastroConsultaResult result = await client.ConsultarCadastroAsync("12345678901234").ConfigureAwait(false);
+    static UfNFe? ParseUfOrDefault(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? UfNFe.SP : SefazEndpointResolver.ParseUf(value);
 
-    Assert.True(result.Sucesso, result.ErroDetalhado ?? "Deveria conseguir consultar.");
-    Assert.Equal("111", result.CodigoStatus);
-    Assert.Equal(1, result.Contribuintes.Count);
+    static int ParseIntOrDefault(string? value, int fallback) =>
+        int.TryParse(value, out int parsed) && parsed >= 0 ? parsed : fallback;
+
+    [Fact]
+    public Task TestParserCadastro()
+    {
+        CadastroConsultaResult result = SefazCadastroResponseParser.Parse(TestData.RespostaCadastroLocalizado);
+
+        Assert.True(result.Sucesso, result.ErroDetalhado ?? "Cadastro deveria ser sucesso.");
+        Assert.Equal("111", result.CodigoStatus);
+        Assert.Single(result.Contribuintes);
+
+        var cad = result.Contribuintes[0];
+        Assert.Equal("110042490114", cad.IE);
+        Assert.Equal("12345678901234", cad.CNPJ);
+        Assert.Equal("SP", cad.UF);
+        Assert.Equal("Habilitado", cad.Situacao);
+        Assert.Equal("EMPRESA TESTE LTDA", cad.Nome);
+        Assert.Equal("TESTE ME", cad.NomeFantasia);
+        Assert.Equal("AVENIDA PAULISTA", cad.Endereco?.Logradouro);
+        Assert.Equal("1000", cad.Endereco?.Numero);
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TestCadastroClient()
+    {
+        using SefazCadastroService service = new(
+            new HttpClient(new StubHttpMessageHandler(req =>
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(TestData.RespostaCadastroLocalizado, Encoding.UTF8, "application/soap+xml")
+                };
+            })),
+            NullLogger<SefazCadastroService>.Instance);
+
+        NFeConsultaOptions options = new()
+        {
+            Ambiente = TipoAmbiente.Homologacao,
+            Uf = UfNFe.SP
+        };
+
+        using NFeCadastroClient client = new(service, options);
+        CadastroConsultaResult result = await client.ConsultarCadastroAsync("12345678901234");
+
+        Assert.True(result.Sucesso, result.ErroDetalhado ?? "Deveria conseguir consultar.");
+        Assert.Equal("111", result.CodigoStatus);
+        Assert.Single(result.Contribuintes);
+    }
+
+}
+
+internal sealed class IntegrationFactAttribute : FactAttribute
+{
+    public IntegrationFactAttribute()
+    {
+        if (!string.Equals(
+            Environment.GetEnvironmentVariable("NFE_RUN_INTEGRATION"),
+            "1",
+            StringComparison.Ordinal))
+        {
+            Skip = "Defina NFE_RUN_INTEGRATION=1 para rodar a consulta real.";
+        }
+    }
 }
 
 internal static class TestData
 {
+    public const string ClientAuthenticationOid = "1.3.6.1.5.5.7.3.2";
     public const string RespostaCadastroLocalizado = """
         <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">
           <soap:Body>
@@ -573,6 +704,7 @@ internal static class TestData
         """;
 
     public const string Chave = "35260600000000000100550010000000011000000006";
+    public const string ChaveMg = "31260600000000000100550010000000011000000007";
 
     public const string XmlComChNFe = """
         <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
@@ -674,48 +806,3 @@ internal sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpRespon
         CancellationToken cancellationToken) =>
         Task.FromResult(send(request));
 }
-
-internal static class Assert
-{
-    public static void True(bool condition, string message)
-    {
-        if (!condition)
-            throw new InvalidOperationException(message);
-    }
-
-    public static void False(bool condition, string message) => True(!condition, message);
-
-    public static void Equal<T>(T expected, T actual)
-    {
-        if (!EqualityComparer<T>.Default.Equals(expected, actual))
-            throw new InvalidOperationException($"Esperado '{expected}', recebido '{actual}'.");
-    }
-
-    public static void Contains(string expectedSubstring, string? actual)
-    {
-        if (actual is null || !actual.Contains(expectedSubstring, StringComparison.Ordinal))
-            throw new InvalidOperationException($"Esperado texto contendo '{expectedSubstring}', recebido '{actual}'.");
-    }
-
-    public static void Throws<TException>(Action action)
-        where TException : Exception
-    {
-        try
-        {
-            action();
-        }
-        catch (TException)
-        {
-            return;
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException(
-                $"Esperada excecao {typeof(TException).Name}, recebida {ex.GetType().Name}.");
-        }
-
-        throw new InvalidOperationException($"Esperada excecao {typeof(TException).Name}.");
-    }
-}
-
-internal sealed class SkipTestException(string message) : Exception(message);

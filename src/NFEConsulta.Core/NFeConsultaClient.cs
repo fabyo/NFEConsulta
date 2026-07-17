@@ -81,7 +81,7 @@ public sealed class NFeConsultaClient : IDisposable
             string chave = ChaveAcessoNFe.ExtractFromXml(xml);
             return ConsultarChaveAsync(chave, cancellationToken, resolvedCorrelationId);
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
         {
             return Task.FromResult(ConsultaNFeResult.Erro(
                 ex.Message,
@@ -100,11 +100,12 @@ public sealed class NFeConsultaClient : IDisposable
         if (xmlStream is null)
             throw new ArgumentNullException(nameof(xmlStream));
 
-        using MemoryStream buffer = new();
-        await xmlStream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
-
         try
         {
+            using MemoryStream buffer = await XmlInputLimits
+                .CopyToMemoryAsync(xmlStream, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
             if (!string.IsNullOrWhiteSpace(xsdDirectory))
             {
                 buffer.Position = 0;
@@ -126,7 +127,7 @@ public sealed class NFeConsultaClient : IDisposable
 
             return await ConsultarChaveAsync(chave, cancellationToken, resolvedCorrelationId).ConfigureAwait(false);
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
         {
             return ConsultaNFeResult.Erro(
                 ex.Message,
@@ -155,7 +156,7 @@ public sealed class NFeConsultaClient : IDisposable
 
             return await ConsultarChaveAsync(chave, cancellationToken, resolvedCorrelationId).ConfigureAwait(false);
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
         {
             return ConsultaNFeResult.Erro(
                 ex.Message,

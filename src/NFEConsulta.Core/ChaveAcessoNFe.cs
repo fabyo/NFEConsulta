@@ -44,6 +44,8 @@ public static partial class ChaveAcessoNFe
         if (string.IsNullOrWhiteSpace(xml))
             throw new ArgumentException("XML nao informado.", nameof(xml));
 
+        XmlInputLimits.EnsureTextWithinLimit(xml);
+
         XDocument doc;
         try
         {
@@ -88,8 +90,9 @@ public static partial class ChaveAcessoNFe
         if (xmlStream is null)
             throw new ArgumentNullException(nameof(xmlStream));
 
-        using StreamReader reader = new(xmlStream, leaveOpen: true);
-        string xml = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        string xml = await XmlInputLimits
+            .ReadTextAsync(xmlStream, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         return ExtractFromXml(xml);
     }
 

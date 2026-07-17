@@ -23,6 +23,7 @@ using NFEConsulta.Extensions;
 
 - `AddSefazNFeService`
 - `AddSefazStatusService`
+- `AddSefazCadastroService`
 
 ## Politicas
 
@@ -36,4 +37,4 @@ using NFEConsulta.Extensions;
 
 ## Versao
 
-Pacote atual: `0.2.3`.
+Pacote atual: `0.4.2`.

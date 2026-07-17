@@ -6,7 +6,7 @@ Contribuicoes sao bem-vindas quando mantem o projeto pequeno, previsivel e segur
 
 1. Rode `dotnet format NFEConsulta.sln --verify-no-changes`.
 2. Rode `dotnet build NFEConsulta.sln`.
-3. Rode `dotnet run --project tests/NFEConsulta.Tests/NFEConsulta.Tests.csproj`.
+3. Rode `dotnet test NFEConsulta.sln`.
 4. Se a mudanca tocar em contrato publico, atualize a documentacao correspondente.
 5. Nao inclua certificados, XML reais, senhas ou dados internos.
 

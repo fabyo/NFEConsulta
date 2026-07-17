@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace NFEConsulta.Infrastructure;
@@ -7,6 +8,8 @@ namespace NFEConsulta.Infrastructure;
 /// </summary>
 public static class CertificadoProvider
 {
+    private const string ClientAuthenticationOid = "1.3.6.1.5.5.7.3.2";
+
     public static X509Certificate2 ObterPorThumbprint(string thumbprint) =>
         ObterPorStore(
             X509FindType.FindByThumbprint,
@@ -30,7 +33,7 @@ public static class CertificadoProvider
         X509Certificate2? cert = store.Certificates
             .Find(X509FindType.FindBySubjectName, subjectContains, validOnly: false)
             .OfType<X509Certificate2>()
-            .Where(c => c.HasPrivateKey)
+            .Where(IsUsableForClientAuthentication)
             .OrderByDescending(c => c.NotAfter)
             .FirstOrDefault();
 
@@ -51,10 +54,12 @@ public static class CertificadoProvider
         X509KeyStorageFlags flags = X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet;
 
 #if NET9_0_OR_GREATER
-        return X509CertificateLoader.LoadPkcs12FromFile(pfxPath, password, flags);
+        X509Certificate2 certificate = X509CertificateLoader.LoadPkcs12FromFile(pfxPath, password, flags);
 #else
-        return new X509Certificate2(pfxPath, password, flags);
+        X509Certificate2 certificate = new(pfxPath, password, flags);
 #endif
+
+        return EnsureUsable(certificate);
     }
 
     public static X509Certificate2 ObterPorPem(string certificatePemPath, string privateKeyPemPath)
@@ -71,15 +76,19 @@ public static class CertificadoProvider
         if (!File.Exists(privateKeyPemPath))
             throw new FileNotFoundException("Arquivo de chave privada PEM nao encontrado.", privateKeyPemPath);
 
-        X509Certificate2 certificate = X509Certificate2.CreateFromPemFile(certificatePemPath, privateKeyPemPath);
+        using X509Certificate2 certificate = X509Certificate2.CreateFromPemFile(
+            certificatePemPath,
+            privateKeyPemPath);
 
         byte[] pkcs12 = certificate.Export(X509ContentType.Pkcs12);
 
 #if NET9_0_OR_GREATER
-        return X509CertificateLoader.LoadPkcs12(pkcs12, password: null);
+        X509Certificate2 loadedCertificate = X509CertificateLoader.LoadPkcs12(pkcs12, password: null);
 #else
-        return new X509Certificate2(pkcs12);
+        X509Certificate2 loadedCertificate = new(pkcs12);
 #endif
+
+        return EnsureUsable(loadedCertificate);
     }
 
     private static X509Certificate2 ObterPorStore(
@@ -100,7 +109,7 @@ public static class CertificadoProvider
 
         X509Certificate2? cert = collection
             .OfType<X509Certificate2>()
-            .Where(c => c.HasPrivateKey)
+            .Where(IsUsableForClientAuthentication)
             .OrderByDescending(c => c.NotAfter)
             .FirstOrDefault();
 
@@ -113,4 +122,34 @@ public static class CertificadoProvider
         value.Replace(" ", string.Empty, StringComparison.Ordinal)
             .Replace(":", string.Empty, StringComparison.Ordinal)
             .ToUpperInvariant();
+
+    private static X509Certificate2 EnsureUsable(X509Certificate2 certificate)
+    {
+        if (IsUsableForClientAuthentication(certificate))
+            return certificate;
+
+        certificate.Dispose();
+        throw new InvalidOperationException(
+            "O certificado deve possuir chave privada, estar dentro da validade e permitir autenticacao de cliente TLS.");
+    }
+
+    private static bool IsUsableForClientAuthentication(X509Certificate2 certificate)
+    {
+        DateTime utcNow = DateTime.UtcNow;
+        if (!certificate.HasPrivateKey
+            || certificate.NotBefore.ToUniversalTime() > utcNow
+            || certificate.NotAfter.ToUniversalTime() <= utcNow)
+        {
+            return false;
+        }
+
+        X509EnhancedKeyUsageExtension? enhancedKeyUsage = certificate.Extensions
+            .OfType<X509EnhancedKeyUsageExtension>()
+            .FirstOrDefault();
+
+        return enhancedKeyUsage is null
+            || enhancedKeyUsage.EnhancedKeyUsages
+                .OfType<Oid>()
+                .Any(oid => oid.Value == ClientAuthenticationOid);
+    }
 }

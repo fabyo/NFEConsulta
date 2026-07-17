@@ -16,7 +16,7 @@
 ## Diferenciais
 
 - Status oficial da SEFAZ via `NFeStatusServico4`, em vez de ping ou teste de rede.
-- Resolucao conservadora de endpoints por UF, com SP como default e override explicito quando necessario.
+- Resolucao conservadora de endpoints por UF: consultas inferem a UF pela chave quando omitida; status e cadastro usam SP como fallback.
 - `CorrelationId` opcional para rastrear jobs, lotes e logs.
 - Validacao de XML contra XSD oficial incluso no pacote.
 - Contratos tipados para separar retorno fiscal de falha tecnica.
@@ -54,9 +54,10 @@ using X509Certificate2 certificado = CertificadoProvider.ObterPorPem(
 NFeConsultaOptions options = new()
 {
     Ambiente = TipoAmbiente.Producao,
-    Uf = UfNFe.SP,
     CorrelationId = "job-20260619-001"
 };
+
+// Sem Uf explicita, a consulta infere o estado pelos dois primeiros digitos da chave.
 
 using NFeConsultaClient client = NFeConsultaClient.CriarComCertificado(certificado, options);
 ConsultaNFeResult resultado = await client.ConsultarChaveAsync("99999999999999999999999999999999999999999999");
